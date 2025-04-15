@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Encode Message - Steganography</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        #image-preview {
+            max-width: 100%;
+            max-height: 300px;
+            display: none;
+            margin-top: 10px;
+        }
+        .method-card {
+            transition: all 0.2s ease;
+            opacity: 0.7;
+        }
+        .method-card.selected {
+            border-color: #3b82f6;
+            opacity: 1;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #3b82f6;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="container mx-auto px-4 py-12 max-w-6xl">
+        <nav class="mb-6">
+            <ol class="flex text-sm text-gray-600">
+                <li><a href="{{ url_for('index') }}" class="text-blue-600 hover:text-blue-800">Home</a></li>
+                <li class="mx-2">/</li>
+                <li class="text-gray-800">Encode Message</li>
+            </ol>
+        </nav>
+
+        <h1 class="text-3xl font-bold text-gray-800 mb-6">Encode Secret Message</h1>
+        
+        {% with messages = get_flashed_messages() %}
+          {% if messages %}
+            {% for message in messages %}
+              <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6" role="alert">
+                <p>{{ message }}</p>
+              </div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+        
+        <div class="bg-white rounded-lg shadow-md overflow-hidden">
+            <div class="p-6">
+                <form action="{{ url_for('encode') }}" method="post" enctype="multipart/form-data">
+                    <div class="mb-6">
+                        <label class="block text-gray-700 text-sm font-bold mb-2">Transform Method:</label>
+                        <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                            <div class="method-card selected border rounded-lg p-3 cursor-pointer bg-blue-50 hover:bg-blue-100" 
+                                 onclick="selectMethod(this, 'DCT')">
+                                <input type="radio" name="method" id="dct" value="DCT" class="hidden" checked>
+                                <div class="text-center">
+                                    <div class="font-medium">DCT</div>
+                                    <div class="text-xs text-gray-500">Discrete Cosine Transform</div>
+                                </div>
+                            </div>
+                            
+                            <div class="method-card border rounded-lg p-3 cursor-pointer hover:bg-blue-100" 
+                                 onclick="selectMethod(this, 'Wavelet')">
+                                <input type="radio" name="method" id="wavelet" value="Wavelet" class="hidden">
+                                <div class="text-center">
+                                    <div class="font-medium">Wavelet</div>
+                                    <div class="text-xs text-gray-500">Wavelet Transform</div>
+                                </div>
+                            </div>
+                            
+                            <div class="method-card border rounded-lg p-3 cursor-pointer hover:bg-blue-100" 
+                                 onclick="selectMethod(this, 'DFT')">
+                                <input type="radio" name="method" id="dft" value="DFT" class="hidden">
+                                <div class="text-center">
+                                    <div class="font-medium">DFT</div>
+                                    <div class="text-xs text-gray-500">Discrete Fourier Transform</div>
+                                </div>
+                            </div>
+                            
+                            <div class="method-card border rounded-lg p-3 cursor-pointer hover:bg-blue-100" 
+                                 onclick="selectMethod(this, 'SVD')">
+                                <input type="radio" name="method" id="svd" value="SVD" class="hidden">
+                                <div class="text-center">
+                                    <div class="font-medium">SVD</div>
+                                    <div class="text-xs text-gray-500">Singular Value Decomposition</div>
+                                </div>
+                            </div>
+                            
+                            <div class="method-card border rounded-lg p-3 cursor-pointer hover:bg-blue-100" 
+                                 onclick="selectMethod(this, 'LBP')">
+                                <input type="radio" name="method" id="lbp" value="LBP" class="hidden">
+                                <div class="text-center">
+                                    <div class="font-medium">LBP</div>
+                                    <div class="text-xs text-gray-500">Local Binary Pattern</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label class="block text-gray-700 text-sm font-bold mb-2">Embedding Strength:</label>
+                        <div class="flex items-center">
+                            <span class="text-gray-500 text-sm mr-2">Low</span>
+                            <input type="range" id="strength" name="strength" min="1" max="30" value="10" 
+                                   class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                            <span class="text-gray-500 text-sm ml-2">High</span>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">Higher values may ensure better message extraction but could affect image quality.</p>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label for="cover_image" class="block text-gray-700 text-sm font-bold mb-2">Cover Image:</label>
+                        <input class="w-full text-gray-700 border border-gray-300 rounded py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                               type="file" id="cover_image" name="cover_image" accept="image/*" onchange="previewImage()">
+                        <p class="text-gray-600 text-xs mt-1">Upload a PNG, JPG, JPEG, or BMP image.</p>
+                        <div class="mt-4 text-center">
+                            <img id="image-preview" class="mx-auto border rounded-md shadow-sm" alt="Image Preview">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label for="secret_message" class="block text-gray-700 text-sm font-bold mb-2">Secret Message:</label>
+                        <textarea class="w-full text-gray-700 border border-gray-300 rounded py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                                  id="secret_message" name="secret_message" rows="5" required></textarea>
+                    </div>
+                    
+                    <div class="text-center">
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-8 rounded-md transition duration-300">
+                            Encode Message
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="mt-8 bg-blue-50 border border-blue-200 rounded p-4">
+            <h3 class="font-medium text-blue-800 mb-2">Method Information</h3>
+            <div id="method-info" class="text-sm text-blue-700">
+                <p><strong>DCT (Discrete Cosine Transform):</strong> Hides data in frequency coefficients. This method is similar to JPEG compression and provides good balance between robustness and capacity.</p>
+            </div>
+        </div>
+    </div>
+    
+    <footer class="bg-gray-100 py-4 mt-10">
+        <div class="container mx-auto text-center">
+            <p class="text-gray-600 text-sm">Transform Domain Steganography Tool</p>
+        </div>
+    </footer>
+    
+    <script>
+        function previewImage() {
+            const preview = document.getElementById('image-preview');
+            const file = document.getElementById('cover_image').files[0];
+            const reader = new FileReader();
+            
+            reader.onloadend = function() {
+                preview.src = reader.result;
+                preview.style.display = 'block';
+            }
+            
+            if (file) {
+                reader.readAsDataURL(file);
+            } else {
+                preview.src = '';
+                preview.style.display = 'none';
+            }
+        }
+        
+        function selectMethod(element, method) {
+            // Update radio selection
+            document.getElementById(method.toLowerCase()).checked = true;
+            
+            // Update UI
+            document.querySelectorAll('.method-card').forEach(card => {
+                card.classList.remove('selected', 'bg-blue-50');
+            });
+            
+            element.classList.add('selected', 'bg-blue-50');
+            
+            // Update method info
+            const methodInfo = document.getElementById('method-info');
+            switch(method) {
+                case 'DCT':
+                    methodInfo.innerHTML = '<p><strong>DCT (Discrete Cosine Transform):</strong> Hides data in frequency coefficients. This method is similar to JPEG compression and provides good balance between robustness and capacity.</p>';
+                    break;
+                case 'Wavelet':
+                    methodInfo.innerHTML = '<p><strong>Wavelet Transform:</strong> Embeds data in wavelet coefficients, offering good localization in both spatial and frequency domains. More robust against certain types of image processing.</p>';
+                    break;
+                case 'DFT':
+                    methodInfo.innerHTML = '<p><strong>DFT (Discrete Fourier Transform):</strong> Embeds data in the magnitude of frequency components. Offers good resistance to geometric transformations like rotation and scaling.</p>';
+                    break;
+                case 'SVD':
+                    methodInfo.innerHTML = '<p><strong>SVD (Singular Value Decomposition):</strong> Modifies singular values of image blocks. Highly resistant to common image processing operations and compression.</p>';
+                    break;
+                case 'LBP':
+                    methodInfo.innerHTML = '<p><strong>LBP (Local Binary Pattern):</strong> Uses texture patterns for embedding data. This method leverages the texture descriptors and can be resilient to certain types of noise.</p>';
+                    break;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Analysis - Steganography</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .image-preview {
+            max-width: 100%;
+            max-height: 200px;
+            display: none;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="container mx-auto px-4 py-12 max-w-6xl">
+        <nav class="mb-6">
+            <ol class="flex text-sm text-gray-600">
+                <li><a href="{{ url_for('index') }}" class="text-blue-600 hover:text-blue-800">Home</a></li>
+                <li class="mx-2">/</li>
+                <li class="text-gray-800">Image Analysis</li>
+            </ol>
+        </nav>
+
+        <h1 class="text-3xl font-bold text-gray-800 mb-6">Analyze Steganography Quality</h1>
+        
+        {% with messages = get_flashed_messages() %}
+          {% if messages %}
+            {% for message in messages %}
+              <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6" role="alert">
+                <p>{{ message }}</p>
+              </div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+        
+        <div class="bg-white rounded-lg shadow-md overflow-hidden">
+            <div class="p-6">
+                <form action="{{ url_for('analyze') }}" method="post" enctype="multipart/form-data">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="original_image" class="block text-gray-700 text-sm font-bold mb-2">Original Image:</label>
+                            <input class="w-full text-gray-700 border border-gray-300 rounded py-2 px-3 focus:outline-none focus:ring-2 focus:ring-purple-500" 
+                                   type="file" id="original_image" name="original_image" accept="image/*" onchange="previewImage(this, 'original-preview')">
+                            <p class="text-gray-600 text-xs mt-1">Upload the original cover image (before steganography)</p>
+                            <div class="mt-4 text-center">
+                                <img id="original-preview" class="image-preview mx-auto border rounded-md shadow-sm" alt="Original Image Preview">
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label for="stego_image" class="block text-gray-700 text-sm font-bold mb-2">Stego Image:</label>
+                            <input class="w-full text-gray-700 border border-gray-300 rounded py-2 px-3 focus:outline-none focus:ring-2 focus:ring-purple-500" 
+                                   type="file" id="stego_image" name="stego_image" accept="image/*" onchange="previewImage(this, 'stego-preview')">
+                            <p class="text-gray-600 text-xs mt-1">Upload the stego image (after steganography)</p>
+                            <div class="mt-4 text-center">
+                                <img id="stego-preview" class="image-preview mx-auto border rounded-md shadow-sm" alt="Stego Image Preview">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-8 text-center">
+                        <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-8 rounded-md transition duration-300">
+                            Analyze Images
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="mt-8 bg-purple-50 border border-purple-200 rounded p-4">
+            <h3 class="font-medium text-purple-800 mb-2">About Image Analysis</h3>
+            <p class="text-sm text-purple-700">
+                This tool helps you evaluate the quality and imperceptibility of steganography by comparing the original image 
+                with the stego image. The analysis will include:
+            </p>
+            <ul class="list-disc pl-5 text-sm text-purple-700 mt-2 space-y-1">
+                <li>Visual comparison with difference highlighting</li>
+                <li>PSNR (Peak Signal-to-Noise Ratio) calculation</li>
+                <li>MSE (Mean Squared Error) calculation</li>
+                <li>Histogram correlation analysis</li>
+            </ul>
+        </div>
+    </div>
+    
+    <footer class="bg-gray-100 py-4 mt-10">
+        <div class="container mx-auto text-center">
+            <p class="text-gray-600 text-sm">Transform Domain Steganography Tool</p>
+        </div>
+    </footer>
+    
+    <script>
+        function previewImage(input, previewId) {
+            const preview = document.getElementById(previewId);
+            const file = input.files[0];
+            
+            if (file) {
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    preview.src = e.target.result;
+                    preview.style.display = 'block';
+                };
+                
+                reader.readAsDataURL(file);
+            } else {
+                preview.src = '';
+                preview.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>

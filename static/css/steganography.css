@@ -1,0 +1,149 @@
+/* Custom styles for Steganography Application */
+
+:root {
+    --primary-color: #2a9d8f;
+    --secondary-color: #e9c46a;
+    --background-color: #f8f9fa;
+    --text-color: #264653;
+    --accent-color: #e76f51;
+    --border-color: #ddd;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: var(--text-color);
+    background-color: var(--background-color);
+    line-height: 1.6;
+}
+
+.app-header {
+    background-color: var(--primary-color);
+    color: white;
+    padding: 1rem;
+    border-radius: 5px;
+    margin-bottom: 1.5rem;
+    text-align: center;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.transform-method {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 1rem 0;
+}
+
+.transform-option {
+    flex: 1;
+    min-width: 120px;
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    text-align: center;
+    background-color: white;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.transform-option:hover {
+    background-color: #f0f0f0;
+}
+
+.transform-option.selected {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.image-preview {
+    border: 1px solid var(--border-color);
+    padding: 10px;
+    margin-top: 1rem;
+    border-radius: 5px;
+    background-color: white;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.image-preview img {
+    max-width: 100%;
+    max-height: 300px;
+    display: block;
+    margin: 0 auto;
+}
+
+.info-box {
+    background-color: #e8f4f8;
+    padding: 1rem;
+    border-left: 4px solid var(--primary-color);
+    margin: 1rem 0;
+    border-radius: 0 5px 5px 0;
+}
+
+.button {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.button:hover {
+    background-color: #248277;
+}
+
+.button.secondary {
+    background-color: var(--secondary-color);
+    color: var(--text-color);
+}
+
+.button.secondary:hover {
+    background-color: #d4b35b;
+}
+
+/* Tabs styling */
+.tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 1rem;
+}
+
+.tab {
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    border: 1px solid transparent;
+    border-bottom: none;
+    margin-right: 5px;
+    border-radius: 5px 5px 0 0;
+}
+
+.tab.active {
+    border-color: var(--border-color);
+    background-color: white;
+    border-bottom-color: white;
+    margin-bottom: -1px;
+}
+
+/* Results panel */
+.results-panel {
+    background-color: white;
+    border: 1px solid var(--border-color);
+    padding: 1rem;
+    border-radius: 5px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.results-panel pre {
+    background-color: #f7f7f7;
+    padding: 0.5rem;
+    border-radius: 3px;
+    overflow-x: auto;
+}
+
+/* Responsive layout */
+@media (max-width: 768px) {
+    .transform-option {
+        min-width: 100px;
+    }
+}

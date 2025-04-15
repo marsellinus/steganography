@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analysis Results - Steganography</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js for histograms -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-50">
+    <div class="container mx-auto px-4 py-12 max-w-6xl">
+        <nav class="mb-6">
+            <ol class="flex text-sm text-gray-600">
+                <li><a href="{{ url_for('index') }}" class="text-blue-600 hover:text-blue-800">Home</a></li>
+                <li class="mx-2">/</li>
+                <li><a href="{{ url_for('analyze') }}" class="text-blue-600 hover:text-blue-800">Image Analysis</a></li>
+                <li class="mx-2">/</li>
+                <li class="text-gray-800">Results</li>
+            </ol>
+        </nav>
+
+        <h1 class="text-3xl font-bold text-gray-800 mb-6">Steganography Analysis Results</h1>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="md:col-span-3">
+                <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                    <div class="border-b px-6 py-3">
+                        <h5 class="font-medium text-lg text-gray-800">Image Comparison</h5>
+                    </div>
+                    <div class="p-6">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div class="text-center">
+                                <h6 class="text-sm font-medium text-gray-700 mb-2">Original Image</h6>
+                                <img src="{{ url_for('uploaded_file', filename=original_filename) }}" 
+                                     class="mx-auto max-h-40 border rounded-md shadow-sm" alt="Original Image">
+                            </div>
+                            <div class="text-center">
+                                <h6 class="text-sm font-medium text-gray-700 mb-2">Stego Image</h6>
+                                <img src="{{ url_for('uploaded_file', filename=stego_filename) }}" 
+                                     class="mx-auto max-h-40 border rounded-md shadow-sm" alt="Stego Image">
+                            </div>
+                            <div class="text-center">
+                                <h6 class="text-sm font-medium text-gray-700 mb-2">Difference (Amplified)</h6>
+                                <img src="{{ url_for('temp_file', filename=diff_filename) }}" 
+                                     class="mx-auto max-h-40 border rounded-md shadow-sm" alt="Difference">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div>
+                <div class="bg-white rounded-lg shadow-md overflow-hidden h-full">
+                    <div class="border-b px-6 py-3">
+                        <h5 class="font-medium text-lg text-gray-800">Image Quality Metrics</h5>
+                    </div>
+                    <div class="p-6">
+                        <div class="space-y-6">
+                            <div>
+                                <h6 class="text-sm font-medium text-gray-700 mb-2">PSNR (Peak Signal-to-Noise Ratio):</h6>
+                                <div class="flex items-center">
+                                    <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                        {% if psnr != 'Not calculated' %}
+                                            {% set quality = psnr|float %}
+                                            {% if quality > 40 %}
+                                                {% set percent = 100 %}
+                                                {% set color = "bg-green-600" %}
+                                                {% set quality_text = "Excellent (Differences imperceptible)" %}
+                                            {% elif quality > 35 %}
+                                                {% set percent = 90 %}
+                                                {% set color = "bg-green-500" %}
+                                                {% set quality_text = "Very Good" %}
+                                            {% elif quality > 30 %}
+                                                {% set percent = 75 %}
+                                                {% set color = "bg-green-400" %}
+                                                {% set quality_text = "Good (Differences hardly noticeable)" %}
+                                            {% elif quality > 25 %}
+                                                {% set percent = 60 %}
+                                                {% set color = "bg-yellow-400" %}
+                                                {% set quality_text = "Fair" %}
+                                            {% elif quality > 20 %}
+                                                {% set percent = 40 %}
+                                                {% set color = "bg-yellow-500" %}
+                                                {% set quality_text = "Acceptable (Some visible differences)" %}
+                                            {% else %}
+                                                {% set percent = 20 %}
+                                                {% set color = "bg-red-500" %}
+                                                {% set quality_text = "Poor (Visible differences)" %}
+                                            {% endif %}
+                                            <div class="{{ color }} h-2.5 rounded-full" style="width: {{ percent }}%"></div>
+                                        {% else %}
+                                            <div class="bg-gray-400 h-2.5 rounded-full" style="width: 50%"></div>
+                                        {% endif %}
+                                    </div>
+                                    <span class="ml-2 text-sm font-medium text-gray-700">{{ psnr }} dB</span>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-1">Higher values indicate better quality</p>
+                                <p class="text-sm font-medium mt-2 
+                                    {% if psnr|float > 30 %}text-green-600
+                                    {% elif psnr|float > 20 %}text-yellow-600
+                                    {% else %}text-red-600{% endif %}">
+                                    {{ quality_text }}
+                                </p>
+                            </div>
+                            
+                            <div>
+                                <h6 class="text-sm font-medium text-gray-700">MSE (Mean Squared Error):</h6>
+                                <p class="text-2xl font-semibold">{{ mse }}</p>
+                                <p class="text-xs text-gray-500">Lower values indicate less distortion</p>
+                            </div>
+                            
+                            <div>
+                                <h6 class="text-sm font-medium text-gray-700">Histogram Correlation:</h6>
+                                <p class="text-2xl font-semibold">{{ correlation }}</p>
+                                <p class="text-xs text-gray-500">Values closer to 1.0 indicate higher similarity</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div>
+                <div class="bg-white rounded-lg shadow-md overflow-hidden h-full">
+                    <div class="border-b px-6 py-3">
+                        <h5 class="font-medium text-lg text-gray-800">Histogram Comparison</h5>
+                    </div>
+                    <div class="p-6">
+                        <div class="w-full h-64">
+                            <canvas id="histogramChart"></canvas>
+                        </div>
+                        <div class="mt-4 text-xs text-gray-500">
+                            <div class="flex items-center">
+                                <span class="inline-block w-3 h-3 bg-blue-500 mr-1"></span>
+                                <span>Original Image</span>
+                                <span class="inline-block w-3 h-3 bg-green-500 ml-4 mr-1"></span>
+                                <span>Stego Image</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow-md overflow-hidden">
+            <div class="border-b px-6 py-3">
+                <h5 class="font-medium text-lg text-gray-800">Analysis Summary</h5>
+            </div>
+            <div class="p-6">
+                <p class="text-gray-700 mb-4">
+                    {% if psnr|float > 40 %}
+                        The steganography implementation has excellent quality with minimal impact on visual appearance. The differences between the original and stego images are imperceptible to the human eye, making it highly secure against visual detection.
+                    {% elif psnr|float > 30 %}
+                        The steganography implementation has good quality with minimal visual artifacts. The differences between the original and stego images are hardly noticeable, making it secure against casual visual inspection.
+                    {% elif psnr|float > 20 %}
+                        The steganography implementation has acceptable quality with some visible artifacts. More careful inspection might reveal differences between the original and stego images. Consider adjusting parameters for better imperceptibility.
+                    {% else %}
+                        The steganography implementation shows visible artifacts and lower quality. The differences between original and stego images may be detectable through visual inspection. Consider using different transform parameters or methods for better results.
+                    {% endif %}
+                </p>
+                
+                <div class="mt-6 text-center">
+                    <a href="{{ url_for('analyze') }}" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded-md transition duration-300 inline-block">
+                        Analyze More Images
+                    </a>
+                    <a href="{{ url_for('index') }}" class="ml-3 bg-white hover:bg-gray-100 text-gray-800 font-medium py-2 px-6 border border-gray-300 rounded-md transition duration-300 inline-block">
+                        Back to Home
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <footer class="bg-gray-100 py-4 mt-10">
+        <div class="container mx-auto text-center">
+            <p class="text-gray-600 text-sm">Transform Domain Steganography Tool</p>
+        </div>
+    </footer>
+    
+    <script>
+        // Load histogram data
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load original image histogram
+            fetch('{{ url_for("generate_histogram", filename=original_filename) }}')
+                .then(response => response.json())
+                .then(originalData => {
+                    // Load stego image histogram
+                    fetch('{{ url_for("generate_histogram", filename=stego_filename) }}')
+                        .then(response => response.json())
+                        .then(stegoData => {
+                            // Create histogram chart
+                            createHistogram(originalData, stegoData);
+                        })
+                        .catch(error => console.error('Error loading stego histogram:', error));
+                })
+                .catch(error => console.error('Error loading original histogram:', error));
+        });
+        
+        function createHistogram(originalData, stegoData) {
+            const ctx = document.getElementById('histogramChart').getContext('2d');
+            
+            // Create labels (0-255)
+            const labels = Array.from({ length: 256 }, (_, i) => i);
+            
+            // Use grayscale average for simplicity
+            const originalGray = labels.map(i => 
+                (originalData.r[i] + originalData.g[i] + originalData.b[i]) / 3);
+            
+            const stegoGray = labels.map(i => 
+                (stegoData.r[i] + stegoData.g[i] + stegoData.b[i]) / 3);
+            
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Original Image',
+                            data: originalGray,
+                            borderColor: 'rgba(59, 130, 246, 0.8)',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            borderWidth: 1,
+                            pointRadius: 0,
+                            fill: true
+                        },
+                        {
+                            label: 'Stego Image',
+                            data: stegoGray,
+                            borderColor: 'rgba(16, 185, 129, 0.8)',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            borderWidth: 1,
+                            pointRadius: 0,
+                            fill: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Pixel Count'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Pixel Value'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>

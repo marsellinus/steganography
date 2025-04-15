@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Decode Result - Steganography</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50">
+    <div class="container mx-auto px-4 py-12 max-w-6xl">
+        <nav class="mb-6">
+            <ol class="flex text-sm text-gray-600">
+                <li><a href="{{ url_for('index') }}" class="text-blue-600 hover:text-blue-800">Home</a></li>
+                <li class="mx-2">/</li>
+                <li><a href="{{ url_for('decode') }}" class="text-blue-600 hover:text-blue-800">Decode Message</a></li>
+                <li class="mx-2">/</li>
+                <li class="text-gray-800">Result</li>
+            </ol>
+        </nav>
+
+        <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6" role="alert">
+            <h4 class="font-bold mb-1">Success!</h4>
+            <p>The hidden message has been extracted from the image.</p>
+        </div>
+        
+        <div class="flex flex-col md:flex-row gap-6">
+            <div class="md:w-2/5">
+                <div class="bg-white rounded-lg shadow-md overflow-hidden mb-6">
+                    <div class="border-b px-6 py-3">
+                        <h5 class="font-medium text-lg text-gray-800">Stego Image</h5>
+                    </div>
+                    <div class="p-6 text-center">
+                        <img src="{{ url_for('uploaded_file', filename=filename) }}" class="mx-auto max-h-60 border rounded-md shadow-sm" alt="Stego Image">
+                    </div>
+                </div>
+            </div>
+            <div class="md:w-3/5">
+                <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                    <div class="border-b px-6 py-3">
+                        <h5 class="font-medium text-lg text-gray-800">Extracted Message</h5>
+                    </div>
+                    <div class="p-6">
+                        <div class="border bg-gray-50 p-4 rounded-md">
+                            {% if message.strip() %}
+                                <pre id="message-content" class="whitespace-pre-wrap break-words text-gray-700 font-mono">{{ message }}</pre>
+                            {% else %}
+                                <div class="text-center text-gray-500 italic">
+                                    <p>The extracted message appears to be empty or contains only whitespace.</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="flex gap-2 mt-4">
+                            <button onclick="copyMessage()" 
+                                   class="text-sm py-1 px-3 border border-gray-300 rounded bg-white hover:bg-gray-100 text-gray-700 transition duration-200">
+                                Copy to Clipboard
+                            </button>
+                            <button onclick="showBinary()" 
+                                   class="text-sm py-1 px-3 border border-gray-300 rounded bg-white hover:bg-gray-100 text-gray-700 transition duration-200">
+                                Show Binary
+                            </button>
+                        </div>
+                        
+                        <div id="binary-view" class="mt-4 hidden border bg-gray-50 p-4 rounded-md">
+                            <h6 class="font-medium text-sm text-gray-700 mb-2">Binary Representation:</h6>
+                            <div id="binary-content" class="text-xs font-mono break-all text-gray-600"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="text-center mt-8">
+            <a href="{{ url_for('decode') }}" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-md transition duration-300 inline-block">
+                Decode Another Image
+            </a>
+            <a href="{{ url_for('index') }}" class="ml-3 bg-white hover:bg-gray-100 text-gray-800 font-medium py-2 px-6 border border-gray-300 rounded-md transition duration-300 inline-block">
+                Back to Home
+            </a>
+        </div>
+    </div>
+    
+    <footer class="bg-gray-100 py-4 mt-10">
+        <div class="container mx-auto text-center">
+            <p class="text-gray-600 text-sm">Transform Domain Steganography Tool</p>
+        </div>
+    </footer>
+    
+    <script>
+        function copyMessage() {
+            const messageText = document.getElementById('message-content')?.textContent || '';
+            navigator.clipboard.writeText(messageText).then(() => {
+                alert('Message copied to clipboard!');
+            }, (err) => {
+                console.error('Could not copy text: ', err);
+            });
+        }
+        
+        function showBinary() {
+            const message = document.getElementById('message-content')?.textContent || '';
+            const binaryView = document.getElementById('binary-view');
+            const binaryContent = document.getElementById('binary-content');
+            
+            binaryView.classList.toggle('hidden');
+            
+            if (!binaryView.classList.contains('hidden')) {
+                if (message.length > 0) {
+                    let binaryStr = '';
+                    for (let i = 0; i < message.length; i++) {
+                        const binary = message.charCodeAt(i).toString(2).padStart(8, '0');
+                        binaryStr += binary + ' ';
+                    }
+                    binaryContent.textContent = binaryStr;
+                } else {
+                    binaryContent.textContent = "No message to convert to binary.";
+                }
+            }
+        }
+    </script>
+</body>
+</html>
