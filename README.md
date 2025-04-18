@@ -330,14 +330,204 @@ for y in range(h_start, h_end, 2):
 - **Strength**: Mengontrol kekuatan modifikasi nilai LBP
 - **Kanal Warna**: Kanal yang dimodifikasi berdasarkan LBP (biasanya biru)
 
-## Fitur
+## Analisis Gambar
 
-- Berbagai teknik domain transform yang dapat dipilih
-- Kekuatan penyembunyian yang dapat disesuaikan
-- Antarmuka GUI dengan pratinjau gambar
-- Antarmuka web dengan Flask
-- Alat analisis gambar (histogram, perhitungan PSNR)
-- Dukungan untuk berbagai format gambar dan audio
+Aplikasi ini menyediakan alat analisis komprehensif untuk mengevaluasi kualitas steganografi dan keamanannya terhadap deteksi. Fitur analisis gambar membantu menilai seberapa baik pesan tersembunyi dalam gambar.
+
+### 1. Perbandingan Gambar (Image Comparison)
+
+Alat perbandingan gambar memungkinkan pengguna untuk membandingkan gambar asli (cover) dengan gambar stego secara visual.
+
+#### Cara Kerja:
+1. Aplikasi menghitung perbedaan absolut antara piksel gambar asli dan stego
+2. Perbedaan divisualisasikan dengan amplifikasi (umumnya 10x) untuk membuat perubahan kecil terlihat
+3. Peta panas warna (colormap) diterapkan untuk membuat area dengan perubahan lebih mudah dikenali
+
+#### Interpretasi:
+- **Area biru gelap**: Sedikit atau tidak ada perubahan
+- **Area hijau/kuning**: Perubahan sedang
+- **Area merah/ungu**: Perubahan signifikan
+
+#### Contoh Implementasi:
+```python
+# Menghitung perbedaan gambar dan mengamplifikasinya untuk visualisasi
+diff = cv2.absdiff(original, stego)
+diff_amplified = cv2.convertScaleAbs(diff, alpha=10)  # Amplifikasi 10x
+diff_color = cv2.applyColorMap(diff_amplified, cv2.COLORMAP_JET)  # Terapkan colormap
+```
+
+### 2. Histogram
+
+Analisis histogram membandingkan distribusi nilai piksel antara gambar asli dan stego untuk mendeteksi perubahan statistik yang mungkin mengungkapkan keberadaan pesan tersembunyi.
+
+#### Cara Kerja:
+1. Histogram dihitung untuk setiap saluran warna (R, G, B) pada gambar asli dan stego
+2. Hasil ditampilkan dalam grafik berdampingan untuk memudahkan perbandingan visual
+3. Korelasi histogram dihitung sebagai metrik untuk mengukur kesamaan statistik
+
+#### Interpretasi:
+- **Korelasi mendekati 1.0**: Histogram sangat mirip, menunjukkan steganografi berkualitas tinggi
+- **Korelasi < 0.95**: Mungkin menunjukkan perubahan yang terdeteksi pada distribusi nilai piksel
+
+#### Contoh Implementasi:
+```python
+# Menghitung histogram untuk gambar asli dan stego
+hist_original = cv2.calcHist([original], [0], None, [256], [0, 256])
+hist_stego = cv2.calcHist([stego], [0], None, [256], [0, 256])
+
+# Menghitung korelasi Pearson antara dua histogram
+correlation, _ = pearsonr(hist_original.flatten(), hist_stego.flatten())
+```
+
+### 3. Metrik Kualitas Gambar
+
+Metrik ini mengukur perbedaan matematis antara gambar asli dan stego untuk mengevaluasi kualitas steganografi.
+
+#### 3.1. PSNR (Peak Signal-to-Noise Ratio)
+
+PSNR adalah metrik yang mengukur kualitas gambar setelah dimodifikasi (dalam desibel).
+
+**Cara Kerja:**
+- Menghitung MSE (Mean Squared Error) antara gambar asli dan stego
+- Mengkonversi MSE ke PSNR menggunakan rumus: PSNR = 20 * log10(255 / √MSE)
+
+**Interpretasi:**
+- **> 40 dB**: Kualitas sangat baik, perbedaan tidak terlihat oleh mata manusia
+- **30-40 dB**: Kualitas baik, perbedaan hampir tidak terlihat
+- **20-30 dB**: Kualitas cukup, beberapa perbedaan mungkin terlihat
+- **< 20 dB**: Kualitas rendah, perbedaan terlihat jelas
+
+```python
+# Menghitung PSNR antara gambar asli dan stego
+mse = np.mean((original - stego) ** 2)
+if mse == 0:
+    psnr = float('inf')
+else:
+    psnr = 20 * math.log10(255.0 / math.sqrt(mse))
+```
+
+#### 3.2. MSE (Mean Squared Error)
+
+MSE mengukur rata-rata dari kuadrat perbedaan antara piksel-piksel gambar asli dan stego.
+
+**Cara Kerja:**
+- Menghitung selisih nilai piksel antara gambar asli dan stego
+- Mengkuadratkan selisih tersebut dan menghitung rata-ratanya
+
+**Interpretasi:**
+- **Mendekati 0**: Gambar sangat mirip
+- **Nilai lebih tinggi**: Menunjukkan lebih banyak perbedaan
+
+```python
+# Menghitung MSE antara gambar asli dan stego
+mse = np.mean((original - stego) ** 2)
+```
+
+#### 3.3. SSIM (Structural Similarity Index)
+
+SSIM adalah metrik yang lebih sesuai dengan persepsi manusia, berfokus pada perubahan dalam struktur gambar.
+
+**Cara Kerja:**
+- Mengukur perubahan dalam luminance, kontras, dan struktur antara gambar asli dan stego
+- Menggabungkan metrik-metrik tersebut menjadi nilai SSIM antara -1 dan 1
+
+**Interpretasi:**
+- **Mendekati 1.0**: Gambar struktural sangat mirip
+- **< 0.95**: Menandakan perubahan struktural yang mungkin terlihat
+
+```python
+# Menghitung SSIM antara gambar asli dan stego
+from skimage.metrics import structural_similarity as ssim
+ssim_value = ssim(original, stego, multichannel=True)
+```
+
+### 4. Deteksi Statistik
+
+Analisis statistik mendeteksi anomali yang mungkin menunjukkan keberadaan pesan tersembunyi.
+
+#### 4.1. Chi-Square Test
+
+Chi-Square test dapat digunakan untuk mendeteksi perubahan tidak wajar dalam frekuensi nilai piksel yang bisa mengindikasikan steganografi LSB.
+
+**Interpretasi:**
+- **p-value rendah**: Kemungkinan gambar berisi pesan tersembunyi
+
+#### 4.2. RS Analysis (Regular-Singular)
+
+RS Analysis adalah metode statistik untuk mendeteksi steganografi berbasis LSB dengan menganalisis kelompok piksel.
+
+### 5. Pengaruh Lapisan Transformasi pada Analisis
+
+Untuk metode steganografi domain transform, analisis tambahan perlu dilakukan pada koefisien domain yang relevan:
+
+#### 5.1. Analisis Koefisien DCT:
+```python
+# Menghitung perubahan koefisien DCT
+block_size = 8
+dct_diff = []
+
+for y in range(0, height, block_size):
+    for x in range(0, width, block_size):
+        original_block = original_y[y:y+block_size, x:x+block_size]
+        stego_block = stego_y[y:y+block_size, x:x+block_size]
+        
+        dct_original = cv2.dct(original_block.astype(np.float32))
+        dct_stego = cv2.dct(stego_block.astype(np.float32))
+        
+        # Hitung perubahan pada koefisien DCT tengah
+        diff = np.abs(dct_original - dct_stego)
+        dct_diff.append(np.mean(diff))
+```
+
+#### 5.2. Analisis Koefisien Wavelet:
+```python
+# Menghitung perubahan koefisien Wavelet
+coeffs_original = pywt.dwt2(original_blue, 'haar')
+coeffs_stego = pywt.dwt2(stego_blue, 'haar')
+
+# Bandingkan koefisien detail horizontal
+cA_orig, (cH_orig, cV_orig, cD_orig) = coeffs_original
+cA_stego, (cH_stego, cV_stego, cD_stego) = coeffs_stego
+
+wavelet_diff = np.mean(np.abs(cH_orig - cH_stego))
+```
+
+## Fitur Analisis dalam Aplikasi
+
+### Antarmuka Web:
+Melalui panel Analyze, Anda dapat:
+1. Mengupload gambar asli dan stego
+2. Melihat gambar perbedaan yang dihasilkan (dengan amplifikasi untuk visibilitas)
+3. Melihat metrik PSNR, MSE, dan korelasi histogram
+4. Membandingkan histogram kedua gambar secara visual
+
+### Aplikasi Desktop:
+Melalui tab Analysis, Anda dapat:
+1. Melakukan perbandingan gambar dengan visualisasi perbedaan
+2. Melihat histogram komparatif
+3. Menghitung metrik PSNR dan MSE
+4. Melakukan analisis statistik tambahan
+
+### Penggunaan Tools Analisis
+
+1. **Persiapan**: Siapkan gambar asli (cover) dan gambar stego
+2. **Perbandingan Visual**:
+   - Upload kedua gambar
+   - Lihat gambar perbedaan yang dihasilkan untuk mendeteksi area modifikasi
+3. **Analisis Kuantitatif**:
+   - Periksa nilai PSNR (>30dB menunjukkan steganografi berkualitas baik)
+   - Periksa MSE (nilai lebih rendah menunjukkan perubahan lebih sedikit)
+   - Periksa korelasi histogram (nilai mendekati 1.0 ideal)
+4. **Analisis Histogram**:
+   - Bandingkan kedua histogram secara visual untuk mendeteksi perbedaan distribusi
+   - Perhatikan perbedaan signifikan yang mungkin mengungkap keberadaan pesan
+
+### Batasan dan Catatan
+
+- Analisis gambar ini dirancang terutama untuk pendidikan dan riset
+- Tidak semua metode deteksi steganografi diimplementasikan
+- Hasil analisis harus diinterpretasikan dengan mempertimbangkan konteks penggunaan
+- Untuk hasil lebih akurat, gunakan metrik tambahan dan alat steganalisis khusus
 
 ## Persyaratan
 
