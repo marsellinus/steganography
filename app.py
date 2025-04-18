@@ -11,6 +11,8 @@ from wavelet_stego import WaveletSteganography
 from dft_stego import DFTSteganography
 from svd_stego import SVDSteganography
 from lbp_stego import LBPSteganography
+from audio_dct_stego import AudioDCTSteganography
+from audio_wavelet_stego import AudioWaveletSteganography
 
 # Make sure 'templates' folder exists and is properly detected
 template_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates')
@@ -245,6 +247,120 @@ def analyze():
             return redirect(request.url)
     
     return render_template('analyze.html')
+
+@app.route('/audio/encode', methods=['GET', 'POST'])
+def audio_encode():
+    if request.method == 'POST':
+        # Check if a file was uploaded
+        if 'cover_audio' not in request.files:
+            flash('No audio file selected')
+            return redirect(request.url)
+            
+        file = request.files['cover_audio']
+        if file.filename == '':
+            flash('No audio file selected')
+            return redirect(request.url)
+            
+        # Allow WAV, FLAC and other audio formats
+        allowed_audio_extensions = {'wav', 'flac', 'mp3', 'ogg'}
+        file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else None
+        if not file_ext or file_ext not in allowed_audio_extensions:
+            flash('Invalid file type. Please use WAV, FLAC, MP3 or OGG audio files.')
+            return redirect(request.url)
+            
+        # Check if secret message exists
+        secret_message = request.form.get('secret_message', '').strip()
+        if not secret_message:
+            flash('Please enter a secret message')
+            return redirect(request.url)
+        
+        # Method selection
+        method = request.form.get('method', 'DCT')
+        # Embedding strength
+        strength = float(request.form.get('strength', 0.1))
+        
+        try:
+            # Save the uploaded file
+            filename = secure_filename(file.filename)
+            cover_audio_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(cover_audio_path)
+            
+            # Generate output filename - always save as WAV
+            base_name = os.path.splitext(filename)[0]
+            output_filename = f"stego_{base_name}.wav"
+            output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
+            
+            # Apply audio steganography based on selected method
+            if method == 'DCT':
+                stego = AudioDCTSteganography(quantization_factor=strength)
+                stego.encode(cover_audio_path, secret_message, output_path)
+            else:  # Wavelet
+                stego = AudioWaveletSteganography(threshold=strength)
+                stego.encode(cover_audio_path, secret_message, output_path)
+                
+            # Redirect to result page
+            return redirect(url_for('audio_encode_result', filename=output_filename))
+            
+        except Exception as e:
+            flash(f"Error: {str(e)}")
+            return redirect(request.url)
+    
+    return render_template('audio_encode.html')
+
+@app.route('/audio/encode/result')
+def audio_encode_result():
+    filename = request.args.get('filename', '')
+    if not filename:
+        flash("No file specified")
+        return redirect(url_for('audio_encode'))
+    
+    return render_template('audio_encode_result.html', filename=filename)
+
+@app.route('/audio/decode', methods=['GET', 'POST'])
+def audio_decode():
+    if request.method == 'POST':
+        # Check if file was uploaded
+        if 'stego_audio' not in request.files:
+            flash('No audio file selected')
+            return redirect(request.url)
+            
+        file = request.files['stego_audio']
+        if file.filename == '':
+            flash('No audio file selected')
+            return redirect(request.url)
+            
+        # Method selection
+        method = request.form.get('method', 'DCT')
+        # Extraction strength
+        strength = float(request.form.get('strength', 0.1))
+        
+        try:
+            # Save the uploaded file
+            filename = secure_filename(file.filename)
+            stego_audio_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(stego_audio_path)
+            
+            # Apply audio steganography decoding based on selected method
+            if method == 'DCT':
+                stego = AudioDCTSteganography(quantization_factor=strength)
+                message = stego.decode(stego_audio_path)
+            else:  # Wavelet
+                stego = AudioWaveletSteganography(threshold=strength)
+                message = stego.decode(stego_audio_path)
+            
+            # Only consider completely empty messages as a failure
+            if message is None:
+                flash("No hidden message found or unable to decode properly")
+                return redirect(request.url)
+                
+            # Render result with extracted message
+            return render_template('audio_decode_result.html', message=message, filename=filename)
+            
+        except Exception as e:
+            flash(f"Error: {str(e)}")
+            return redirect(request.url)
+    
+    return render_template('audio_decode.html')
 
 def calculate_image_quality(original_path, stego_path):
     """Calculate PSNR and MSE between two images"""

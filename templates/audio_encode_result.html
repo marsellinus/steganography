@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Encode Result - Steganography</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50">
+    <div class="container mx-auto px-4 py-12 max-w-6xl">
+        <nav class="mb-6">
+            <ol class="flex text-sm text-gray-600">
+                <li><a href="{{ url_for('index') }}" class="text-blue-600 hover:text-blue-800">Home</a></li>
+                <li class="mx-2">/</li>
+                <li><a href="{{ url_for('audio_encode') }}" class="text-blue-600 hover:text-blue-800">Encode Audio Message</a></li>
+                <li class="mx-2">/</li>
+                <li class="text-gray-800">Result</li>
+            </ol>
+        </nav>
+
+        <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6" role="alert">
+            <h4 class="font-bold mb-1">Success!</h4>
+            <p>Your message has been successfully encoded into the audio.</p>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="md:col-span-3">
+                <div class="bg-white rounded-lg shadow-md overflow-hidden h-full">
+                    <div class="border-b px-6 py-3">
+                        <h5 class="font-medium text-lg text-gray-800">Stego Audio</h5>
+                    </div>
+                    <div class="p-6 text-center">
+                        <audio controls class="w-full mb-4">
+                            <source src="{{ url_for('output_file', filename=filename) }}" type="audio/wav">
+                            Your browser does not support the audio element.
+                        </audio>
+                        
+                        <div class="mt-6">
+                            <a href="{{ url_for('output_file', filename=filename) }}" 
+                               class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-md transition duration-300 inline-block" 
+                               download>Download Stego Audio</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow-md overflow-hidden">
+            <div class="border-b px-6 py-3">
+                <h5 class="font-medium text-lg text-gray-800">Next Steps</h5>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <a href="{{ url_for('audio_encode') }}" class="bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-medium py-4 px-4 rounded-md transition duration-300 flex flex-col items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mb-2 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                        <span>Encode Another Message</span>
+                    </a>
+                    <a href="{{ url_for('audio_decode') }}" class="bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-medium py-4 px-4 rounded-md transition duration-300 flex flex-col items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mb-2 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16l4-4 4 4m-4-4v8m-4-8l4-4 4 4m-4-4V4" />
+                        </svg>
+                        <span>Try Decoding a Message</span>
+                    </a>
+                </div>
+            </div>
+            <div class="bg-gray-50 px-6 py-4">
+                <div class="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4">
+                    <strong>Note:</strong> To decode this audio, use the Decode Audio feature and select the same transform method that you used for encoding.
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <footer class="bg-gray-100 py-4 mt-10">
+        <div class="container mx-auto text-center">
+            <p class="text-gray-600 text-sm">Transform Domain Steganography Tool</p>
+        </div>
+    </footer>
+</body>
+</html>

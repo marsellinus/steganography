@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Encode Audio - Steganography</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .method-card {
+            transition: all 0.2s ease;
+            opacity: 0.7;
+        }
+        .method-card.selected {
+            border-color: #3b82f6;
+            opacity: 1;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #3b82f6;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="container mx-auto px-4 py-12 max-w-6xl">
+        <nav class="mb-6">
+            <ol class="flex text-sm text-gray-600">
+                <li><a href="{{ url_for('index') }}" class="text-blue-600 hover:text-blue-800">Home</a></li>
+                <li class="mx-2">/</li>
+                <li class="text-gray-800">Encode Audio Message</li>
+            </ol>
+        </nav>
+
+        <h1 class="text-3xl font-bold text-gray-800 mb-6">Encode Secret Message in Audio</h1>
+        
+        {% with messages = get_flashed_messages() %}
+          {% if messages %}
+            {% for message in messages %}
+              <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6" role="alert">
+                <p>{{ message }}</p>
+              </div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+        
+        <div class="bg-white rounded-lg shadow-md overflow-hidden">
+            <div class="p-6">
+                <form action="{{ url_for('audio_encode') }}" method="post" enctype="multipart/form-data">
+                    <div class="mb-6">
+                        <label class="block text-gray-700 text-sm font-bold mb-2">Transform Method:</label>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="method-card selected border rounded-lg p-3 cursor-pointer bg-blue-50 hover:bg-blue-100" 
+                                 onclick="selectMethod(this, 'DCT')">
+                                <input type="radio" name="method" id="audio-dct" value="DCT" class="hidden" checked>
+                                <div class="text-center">
+                                    <div class="font-medium">DCT</div>
+                                    <div class="text-xs text-gray-500">Discrete Cosine Transform</div>
+                                </div>
+                            </div>
+                            
+                            <div class="method-card border rounded-lg p-3 cursor-pointer hover:bg-blue-100" 
+                                 onclick="selectMethod(this, 'Wavelet')">
+                                <input type="radio" name="method" id="audio-wavelet" value="Wavelet" class="hidden">
+                                <div class="text-center">
+                                    <div class="font-medium">Wavelet</div>
+                                    <div class="text-xs text-gray-500">Wavelet Transform</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label class="block text-gray-700 text-sm font-bold mb-2">Embedding Strength:</label>
+                        <div class="flex items-center">
+                            <span class="text-gray-500 text-sm mr-2">Low</span>
+                            <input type="range" id="strength" name="strength" min="0.01" max="0.5" step="0.01" value="0.1" 
+                                   class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                            <span class="text-gray-500 text-sm ml-2">High</span>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">Lower values have less impact on audio quality but may reduce decode reliability.</p>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label for="cover_audio" class="block text-gray-700 text-sm font-bold mb-2">Cover Audio:</label>
+                        <input class="w-full text-gray-700 border border-gray-300 rounded py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                               type="file" id="cover_audio" name="cover_audio" accept="audio/*">
+                        <p class="text-gray-600 text-xs mt-1">Upload a WAV or FLAC audio file (.wav, .flac)</p>
+                        
+                        <div class="mt-4 text-center" id="audio-preview-container" style="display: none;">
+                            <audio id="audio-preview" controls class="w-full"></audio>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label for="secret_message" class="block text-gray-700 text-sm font-bold mb-2">Secret Message:</label>
+                        <textarea class="w-full text-gray-700 border border-gray-300 rounded py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                                  id="secret_message" name="secret_message" rows="5" required></textarea>
+                    </div>
+                    
+                    <div class="text-center">
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-8 rounded-md transition duration-300">
+                            Encode Message
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="mt-8 bg-blue-50 border border-blue-200 rounded p-4">
+            <h3 class="font-medium text-blue-800 mb-2">Audio Steganography Information</h3>
+            <div id="method-info" class="text-sm text-blue-700">
+                <p><strong>DCT (Discrete Cosine Transform):</strong> Hides data in frequency coefficients of the audio signal. This method modifies mid-frequency components to minimize audible changes.</p>
+            </div>
+        </div>
+    </div>
+    
+    <footer class="bg-gray-100 py-4 mt-10">
+        <div class="container mx-auto text-center">
+            <p class="text-gray-600 text-sm">Transform Domain Steganography Tool</p>
+        </div>
+    </footer>
+    
+    <script>
+        function selectMethod(element, method) {
+            // Update radio selection
+            document.getElementById('audio-' + method.toLowerCase()).checked = true;
+            
+            // Update UI
+            document.querySelectorAll('.method-card').forEach(card => {
+                card.classList.remove('selected', 'bg-blue-50');
+            });
+            
+            element.classList.add('selected', 'bg-blue-50');
+            
+            // Update method info
+            const methodInfo = document.getElementById('method-info');
+            if (method === 'DCT') {
+                methodInfo.innerHTML = '<p><strong>DCT (Discrete Cosine Transform):</strong> Hides data in frequency coefficients of the audio signal. This method modifies mid-frequency components to minimize audible changes.</p>';
+            } else if (method === 'Wavelet') {
+                methodInfo.innerHTML = '<p><strong>Wavelet Transform:</strong> Embeds data in wavelet coefficients of the audio signal, offering good localization in both time and frequency domains. More robust against certain types of audio processing.</p>';
+            }
+        }
+        
+        document.getElementById('cover_audio').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const audio = document.getElementById('audio-preview');
+                audio.src = URL.createObjectURL(file);
+                document.getElementById('audio-preview-container').style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>

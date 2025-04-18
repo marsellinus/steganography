@@ -31,7 +31,7 @@
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
             <div class="bg-white rounded-lg shadow-md transition-all duration-300 hover-card h-full">
                 <div class="bg-blue-600 text-white py-3 px-4 rounded-t-lg">
-                    <h5 class="text-xl font-medium">Encode Message</h5>
+                    <h5 class="text-xl font-medium">Encode Image</h5>
                 </div>
                 <div class="p-6">
                     <p class="text-gray-700 mb-6">Hide a secret message in an image using transform domain techniques.</p>
@@ -43,7 +43,7 @@
             
             <div class="bg-white rounded-lg shadow-md transition-all duration-300 hover-card h-full">
                 <div class="bg-green-600 text-white py-3 px-4 rounded-t-lg">
-                    <h5 class="text-xl font-medium">Decode Message</h5>
+                    <h5 class="text-xl font-medium">Decode Image</h5>
                 </div>
                 <div class="p-6">
                     <p class="text-gray-700 mb-6">Extract hidden messages from stego images that were encoded using our methods.</p>
@@ -65,6 +65,33 @@
                 </div>
             </div>
         </div>
+
+        <!-- New row for audio steganography options -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+            <div class="bg-white rounded-lg shadow-md transition-all duration-300 hover-card h-full">
+                <div class="bg-yellow-600 text-white py-3 px-4 rounded-t-lg">
+                    <h5 class="text-xl font-medium">Encode Audio</h5>
+                </div>
+                <div class="p-6">
+                    <p class="text-gray-700 mb-6">Hide a secret message in an audio file using transform domain techniques.</p>
+                    <div class="text-center">
+                        <a href="{{ url_for('audio_encode') }}" class="inline-block bg-yellow-600 hover:bg-yellow-700 text-white font-medium py-2 px-6 rounded-md transition duration-300">Start Audio Encoding</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow-md transition-all duration-300 hover-card h-full">
+                <div class="bg-orange-600 text-white py-3 px-4 rounded-t-lg">
+                    <h5 class="text-xl font-medium">Decode Audio</h5>
+                </div>
+                <div class="p-6">
+                    <p class="text-gray-700 mb-6">Extract hidden messages from stego audio files that were encoded using our methods.</p>
+                    <div class="text-center">
+                        <a href="{{ url_for('audio_decode') }}" class="inline-block bg-orange-600 hover:bg-orange-700 text-white font-medium py-2 px-6 rounded-md transition duration-300">Start Audio Decoding</a>
+                    </div>
+                </div>
+            </div>
+        </div>
         
         <div class="bg-white rounded-lg shadow-md p-6 mb-10">
             <div class="border-b border-gray-200 pb-3 mb-4">
@@ -74,7 +101,7 @@
                 <p class="text-gray-700 mb-4">This application provides steganography functionality using transform domain techniques:</p>
                 <ul class="list-disc pl-6 text-gray-700 mb-4 space-y-2">
                     <li><span class="font-semibold">DCT (Discrete Cosine Transform)</span> - Hides data in frequency coefficients after DCT transform</li>
-                    <li><span class="font-semibold">Wavelet Transform</span> - Embeds data in wavelet coefficients of the image</li>
+                    <li><span class="font-semibold">Wavelet Transform</span> - Embeds data in wavelet coefficients of the image or audio</li>
                     <li><span class="font-semibold">DFT (Discrete Fourier Transform)</span> - Hides data in frequency magnitude values</li>
                     <li><span class="font-semibold">SVD (Singular Value Decomposition)</span> - Embeds data by modifying singular values</li>
                     <li><span class="font-semibold">LBP (Local Binary Pattern)</span> - Utilizes texture patterns for steganography</li>
