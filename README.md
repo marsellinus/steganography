@@ -40,215 +40,6 @@ Aplikasi ini mengimplementasikan berbagai teknik steganografi domain transform u
    - Menanamkan data dalam koefisien wavelet sinyal audio
    - Menawarkan lokalisasi yang baik di domain waktu dan frekuensi
 
-## Penjelasan Teknis Detail LBP Steganography
-
-### 1. Konsep Dasar LBP (Local Binary Pattern)
-
-LBP adalah operator tekstur yang digunakan untuk mengklasifikasikan pola tekstur pada citra. LBP mengkarakterisasi area lokal citra dengan membandingkan nilai piksel pusat dengan nilai piksel tetangganya dan mengubahnya menjadi nilai biner.
-
-#### Algoritma LBP Dasar:
-
-1. Untuk setiap piksel pusat (x,y) dalam sebuah gambar:
-   - Bandingkan nilai keabuan (grayscale) piksel pusat dengan piksel tetangga di sekitarnya
-   - Jika nilai piksel tetangga lebih besar atau sama dengan nilai piksel pusat, maka tandai sebagai 1, jika tidak 0
-   - Susun bit hasil perbandingan (searah jarum jam atau sebaliknya) menjadi kode biner
-   - Konversi kode biner ke nilai desimal, yang menjadi nilai LBP piksel pusat
-
-```
-Contoh untuk tetangga 3x3:
- Nilai piksel gambar:      Perbandingan dengan     Kode biner:
-                          nilai tengah (100):
-  65   70   95            0     0     0              00101011
-  80  100   85   -->      0     -     0      -->  
-  95  110  100            0     1     1             Nilai LBP = 43
-```
-
-### 2. LBP dalam Steganografi
-
-LBP Steganography menggunakan sifat-sifat pola biner lokal dalam citra untuk menyembunyikan pesan. Pendekatan ini memiliki keunggulan karena:
-
-1. **Menggunakan informasi tekstur**: Pesan tersembunyi dalam pola tekstur alami gambar
-2. **Kesulitan deteksi visual**: Perubahan pada pola tekstur lebih sulit dideteksi mata manusia
-3. **Ketahanan terhadap noise tertentu**: Karena berbasis pola relatif (bukan nilai absolut)
-
-### 3. Implementasi Teknis LBP Steganography
-
-#### Proses Encoding:
-
-1. **Persiapan dan Transformasi**:
-   ```python
-   # Konversi gambar ke grayscale
-   gray = cv2.cvtColor(cover_img, cv2.COLOR_BGR2GRAY)
-   
-   # Hitung representasi LBP
-   # Radius=3 menentukan jari-jari tetangga, n_points=24 adalah jumlah titik tetangga
-   lbp = local_binary_pattern(gray, n_points=24, radius=3, method='uniform')
-   
-   # Normalisasi nilai LBP ke rentang 0-255 untuk pemrosesan lebih lanjut
-   lbp_normalized = cv2.normalize(lbp, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
-   ```
-
-2. **Penyisipan Pesan**:
-   ```python
-   # Algoritma penyisipan bit (untuk setiap piksel yang dipilih)
-   for y in range(h_start, h_end, 2):
-       for x in range(w_start, w_end, 4):  # Menggunakan setiap piksel ke-4 secara horizontal
-           bit = int(binary_message[message_index])
-           pixel_val = int(lbp_normalized[y, x])
-           
-           # Jika bit pesan adalah 0, ubah nilai LBP menjadi kelipatan genap dari strength
-           if bit == 0:
-               stego_lbp[y, x] = int(strength * round(pixel_val / strength))
-           # Jika bit pesan adalah 1, ubah nilai LBP menjadi kelipatan ganjil dari strength
-           else:
-               stego_lbp[y, x] = int(strength * round(pixel_val / strength - 0.5) + strength / 2)
-   ```
-
-3. **Penerapan Perubahan**:
-   ```python
-   # Menerapkan perubahan ke saluran warna (misalnya, saluran biru)
-   for y in range(height):
-       for x in range(width):
-           if mask[y, x] == 255:  # Piksel yang berisi data pesan
-               # Terapkan nilai yang dimodifikasi dengan atenuasi untuk meminimalkan distorsi visual
-               diff = int(stego_lbp[y, x] - lbp_normalized[y, x])
-               stego_img[y, x, 0] = np.clip(cover_img[y, x, 0] + diff // 4, 0, 255)
-   ```
-
-#### Proses Decoding:
-
-1. **Transformasi dan Ekstraksi**:
-   ```python
-   # Ekstrak saluran yang digunakan untuk penyimpanan dan konversi ke grayscale
-   gray = cv2.cvtColor(stego_img, cv2.COLOR_BGR2GRAY)
-   
-   # Hitung representasi LBP dengan parameter yang sama dengan encoding
-   lbp = local_binary_pattern(gray, n_points=24, radius=3, method='uniform')
-   lbp_normalized = cv2.normalize(lbp, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
-   ```
-
-2. **Pengambilan Bit Pesan**:
-   ```python
-   # Untuk setiap piksel yang digunakan dalam encoding
-   for y in range(h_start, h_end, 2):
-       for x in range(w_start, w_end, 4):
-           pixel_val = int(stego_img[y, x, 0])  # Menggunakan saluran biru
-           
-           # Memeriksa apakah nilai piksel adalah kelipatan genap atau ganjil dari strength
-           remainder = (pixel_val % strength) / strength
-           
-           # Jika nilai mendekati setengah langkah, maka bit adalah 1
-           if 0.35 < remainder < 0.65:
-               extracted_bits.append(1)
-           # Jika tidak, bit adalah 0
-           else:
-               extracted_bits.append(0)
-   ```
-
-### 4. Parameter Penting dalam LBP Steganography
-
-1. **Radius (radius)**: 
-   - Menentukan jarak tetangga dari piksel pusat
-   - Nilai yang lebih besar mencakup area yang lebih luas tetapi kurang sensitif terhadap detail kecil
-   - Implementasi menggunakan radius=3
-
-2. **Jumlah Titik (n_points)**:
-   - Jumlah titik sampel pada lingkaran dengan radius tertentu
-   - Nilai yang lebih tinggi memberikan representasi yang lebih detail, tetapi meningkatkan kompleksitas
-   - Implementasi menggunakan n_points=24
-
-3. **Metode LBP (method)**:
-   - 'uniform': Menggunakan pola seragam yang mengurangi dimensi dan lebih tahan terhadap noise
-   - 'default': Menggunakan semua pola yang mungkin
-   - 'ror': Menggunakan pola invarian rotasi
-   - Implementasi menggunakan method='uniform'
-
-4. **Kekuatan (strength)**:
-   - Mengendalikan besarnya perubahan pada pola LBP
-   - Nilai yang lebih tinggi memberikan ketahanan yang lebih baik tetapi mungkin menyebabkan distorsi visual
-   - Implementasi menggunakan parameter yang dapat disesuaikan (default: 10.0)
-
-### 5. Kelebihan dan Kekurangan
-
-#### Kelebihan:
-- **Berbasis tekstur**: Menggunakan karakteristik tekstur alami gambar
-- **Ketahanan terhadap noise**: Lebih tahan terhadap beberapa jenis noise dan pemrosesan gambar
-- **Distribusi modifikasi**: Perubahan tersebar pada area tekstur, mengurangi deteksi visual
-
-#### Kekurangan:
-- **Keterbatasan kapasitas**: Jumlah bit yang dapat disembunyikan lebih rendah daripada metode LSB konvensional
-- **Area smooth**: Kurang efektif pada area gambar dengan tekstur minimal (area halus)
-- **Kompleksitas komputasi**: Memerlukan perhitungan LBP yang lebih intensif komputasi
-
-### 6. Contoh Kode Penuh LBP Steganography
-
-```python
-def encode_lbp(cover_image_path, message, output_path, strength=10.0, radius=3, n_points=24):
-    """
-    Menyembunyikan pesan dalam gambar menggunakan LBP steganography
-    
-    Langkah-langkah:
-    1. Konversi pesan ke representasi biner
-    2. Hitung pola biner lokal (LBP) dari gambar cover
-    3. Modifikasi nilai LBP berdasarkan bit pesan
-    4. Terapkan perubahan ke saluran warna gambar
-    5. Simpan gambar stego
-    """
-    # Langkah 1: Konversi pesan ke biner dengan terminator
-    binary_message = ''.join(format(ord(c), '08b') for c in message) + '00000000'
-    
-    # Langkah 2: Load gambar dan hitung LBP
-    cover_img = cv2.imread(cover_image_path, cv2.IMREAD_COLOR)
-    gray = cv2.cvtColor(cover_img, cv2.COLOR_BGR2GRAY)
-    lbp = local_binary_pattern(gray, n_points, radius, method='uniform')
-    lbp_normalized = cv2.normalize(lbp, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
-    
-    # Langkah 3: Modifikasi nilai LBP berdasarkan bit pesan
-    height, width = gray.shape
-    stego_lbp = lbp_normalized.copy()
-    mask = np.zeros((height, width), dtype=np.uint8)
-    
-    # Tentukan area untuk penyembunyian (menghindari tepi)
-    h_start, h_end = height // 8, height - height // 8
-    w_start, w_end = width // 8, width - width // 8
-    
-    # Periksa kapasitas
-    max_bits = (h_end - h_start) * (w_end - w_start) // 8
-    if len(binary_message) > max_bits:
-        raise ValueError(f"Pesan terlalu panjang! Max {max_bits} bits, got {len(binary_message)}")
-    
-    # Sisipkan pesan
-    message_index = 0
-    for y in range(h_start, h_end, 2):
-        if message_index >= len(binary_message): break
-        for x in range(w_start, w_end, 4):
-            if message_index >= len(binary_message): break
-            
-            bit = int(binary_message[message_index])
-            pixel_val = int(lbp_normalized[y, x])
-            
-            # Modifikasi nilai LBP berdasarkan bit pesan
-            if bit == 0:
-                stego_lbp[y, x] = int(strength * np.floor(pixel_val / strength))
-            else:
-                stego_lbp[y, x] = int(strength * np.floor(pixel_val / strength) + strength / 2)
-            
-            message_index += 1
-            mask[y, x] = 255  # Tandai piksel ini di mask
-    
-    # Langkah 4: Terapkan perubahan ke saluran biru
-    stego_img = cover_img.copy()
-    for y in range(height):
-        for x in range(width):
-            if mask[y, x] == 255:
-                diff = int(stego_lbp[y, x] - lbp_normalized[y, x])
-                stego_img[y, x, 0] = np.clip(cover_img[y, x, 0] + diff // 4, 0, 255)
-    
-    # Langkah 5: Simpan gambar stego
-    cv2.imwrite(output_path, stego_img)
-    return output_path
-```
-
 ## Proses Steganografi
 
 ### Proses Encoding (Penyembunyian Pesan)
@@ -268,7 +59,7 @@ def encode_lbp(cover_image_path, message, output_path, strength=10.0, radius=3, 
      - Wavelet: Koefisien detail horizontal dimodifikasi
      - DFT: Magnitudo komponen frekuensi dimodifikasi
      - SVD: Nilai singular terbesar dari blok gambar dimodifikasi
-     - LBP: Pola biner lokal dimodifikasi sesuai algoritma di atas
+     - LBP: Pola biner lokal dimodifikasi
 
 4. **Transformasi Balik**:
    - Domain transform diubah kembali ke domain asli (spasial/temporal)
@@ -289,9 +80,22 @@ def encode_lbp(cover_image_path, message, output_path, strength=10.0, radius=3, 
 
 ## Detail Teknis Implementasi
 
-### DCT (Discrete Cosine Transform):
+### 1. DCT (Discrete Cosine Transform)
+
+DCT mengubah gambar dari domain spasial ke domain frekuensi, menghasilkan koefisien yang mewakili frekuensi berbeda dalam gambar. Koefisien frekuensi rendah berisi informasi visual yang paling penting, sementara koefisien frekuensi tinggi mewakili detail yang kurang terlihat.
+
+#### Algoritma Encoding:
+1. Gambar dibagi menjadi blok 8x8 piksel (standar dalam JPEG)
+2. Setiap blok dikonversi ke ruang warna YCrCb dan kanal Y (luminance) digunakan untuk penyisipan
+3. DCT diterapkan pada setiap blok, menghasilkan matriks 8x8 koefisien frekuensi
+4. Koefisien frekuensi menengah dimodifikasi untuk menyimpan bit pesan (koefisien (4,5) digunakan dalam implementasi ini)
+5. Bit 0 → Koefisien dibulatkan ke kelipatan genap dari faktor kuantisasi
+6. Bit 1 → Koefisien dibulatkan ke kelipatan ganjil dari faktor kuantisasi
+7. DCT terbalik diterapkan untuk mengkonversi blok kembali ke domain spasial
+8. Blok yang dimodifikasi disusun kembali untuk membentuk gambar stego
+
 ```python
-# Proses encoding
+# Proses encoding DCT
 dct_block = cv2.dct(block)  # Menerapkan DCT pada blok 8x8
 bit = int(binary_message[message_index])
 if bit == 0:
@@ -303,9 +107,35 @@ else:
 block = cv2.idct(dct_block)  # Menerapkan inverse DCT
 ```
 
-### Wavelet Transform:
+#### Algoritma Decoding:
+1. Gambar stego dibagi menjadi blok 8x8 piksel
+2. Kanal Y dari setiap blok diekstrak
+3. DCT diterapkan pada setiap blok
+4. Koefisien (4,5) diperiksa untuk menentukan apakah itu kelipatan genap atau ganjil
+5. Jika koefisien mendekati kelipatan genap → bit 0, jika mendekati kelipatan ganjil → bit 1
+6. Bit-bit dikumpulkan hingga menemukan urutan 8 bit nol (terminator)
+7. Bit-bit dikonversi kembali ke teks
+
+#### Parameter Utama:
+- **Block Size**: Ukuran blok untuk transformasi DCT (biasanya 8x8)
+- **Quantization Factor**: Mengontrol kekuatan penyembunyian dan ekstraksi (nilai lebih besar = lebih tahan, tapi kualitas gambar lebih rendah)
+- **Koefisien Target**: Posisi koefisien yang dimodifikasi dalam blok DCT (posisi frekuensi menengah ideal)
+
+### 2. Wavelet Transform
+
+Transformasi Wavelet memecah gambar menjadi komponen frekuensi berbeda dengan lokalisasi spasial yang baik. Ini menghasilkan subband yang mewakili aproksimasi (cA) dan detail (cH = horizontal, cV = vertikal, cD = diagonal).
+
+#### Algoritma Encoding:
+1. Gambar dikonversi ke kanal R, G, B dan biasanya kanal biru dipilih untuk penyisipan (mata manusia kurang sensitif terhadap perubahan biru)
+2. Transformasi wavelet diterapkan, menghasilkan koefisien aproksimasi (cA) dan detail (cH, cV, cD)
+3. Koefisien detail horizontal (cH) dimodifikasi untuk menyisipkan bit pesan
+4. Bit 0 → Koefisien dibuat menjadi kelipatan genap dari threshold
+5. Bit 1 → Koefisien dibuat menjadi kelipatan ganjil dari threshold
+6. Transformasi wavelet terbalik diterapkan untuk menghasilkan kanal biru yang dimodifikasi
+7. Kanal yang dimodifikasi digabungkan kembali dengan kanal lain untuk menghasilkan gambar stego
+
 ```python
-# Proses encoding
+# Proses encoding Wavelet
 coeffs = pywt.dwt2(blue_channel, wavelet)  # Menerapkan transformasi wavelet
 cA, (cH, cV, cD) = coeffs  # Mendapatkan koefisien aproksimasi dan detail
 
@@ -324,9 +154,37 @@ modified_coeffs = cA, (cH, cV, cD)
 blue_channel_modified = pywt.idwt2(modified_coeffs, wavelet)
 ```
 
-### DFT (Discrete Fourier Transform):
+#### Algoritma Decoding:
+1. Kanal biru dari gambar stego diekstrak
+2. Transformasi wavelet diterapkan
+3. Koefisien detail horizontal (cH) diperiksa
+4. Jika koefisien mendekati kelipatan genap → bit 0, jika mendekati kelipatan ganjil → bit 1
+5. Bit-bit dikumpulkan hingga urutan 8 bit nol (terminator) ditemukan
+6. Bit-bit dikonversi kembali ke teks
+
+#### Parameter Utama:
+- **Wavelet**: Jenis wavelet yang digunakan (haar, db1, db4, dll.)
+- **Level**: Tingkat dekomposisi wavelet (biasanya level 1)
+- **Threshold**: Mengontrol kekuatan modifikasi (nilai lebih besar = lebih tahan, tapi distorsi lebih terlihat)
+- **Subband Target**: Komponen wavelet yang dimodifikasi (biasanya cH)
+
+### 3. DFT (Discrete Fourier Transform)
+
+DFT mengubah gambar ke domain frekuensi menghasilkan koefisien kompleks yang mewakili magnitudo dan fase dari komponen frekuensi. DFT unggul dalam menghadapi transformasi geometris seperti rotasi dan penskalaan.
+
+#### Algoritma Encoding:
+1. Gambar dikonversi ke kanal R, G, B dan biasanya kanal hijau dipilih untuk penyisipan
+2. DFT diterapkan pada kanal tersebut
+3. Hasil shift diterapkan untuk memindahkan frekuensi nol ke tengah
+4. Magnitudo dari koefisien frekuensi menengah dimodifikasi untuk menyisipkan bit pesan
+5. Bit 0 → Magnitudo dibuat menjadi kelipatan genap dari strength parameter
+6. Bit 1 → Magnitudo dibuat menjadi kelipatan ganjil dari strength parameter
+7. Komponen real dan imajiner diskalakan untuk mencapai magnitudo yang diinginkan
+8. DFT terbalik dan shift terbalik diterapkan
+9. Kanal yang dimodifikasi dikembalikan ke gambar untuk menghasilkan gambar stego
+
 ```python
-# Proses encoding
+# Proses encoding DFT
 dft = cv2.dft(green_channel, flags=cv2.DFT_COMPLEX_OUTPUT)
 dft_shift = np.fft.fftshift(dft)  # Menggeser frekuensi nol ke tengah
 
@@ -343,9 +201,36 @@ dft_shift[i, j, 0] *= scale
 dft_shift[i, j, 1] *= scale
 ```
 
-### SVD (Singular Value Decomposition):
+#### Algoritma Decoding:
+1. Kanal hijau dari gambar stego diekstrak
+2. DFT diterapkan
+3. Hasil shift diterapkan
+4. Magnitudo dari koefisien target diperiksa
+5. Jika magnitudo mendekati kelipatan genap → bit 0, jika mendekati kelipatan ganjil → bit 1
+6. Bit-bit dikumpulkan hingga urutan 8 bit nol (terminator) ditemukan
+7. Bit-bit dikonversi kembali ke teks
+
+#### Parameter Utama:
+- **Strength**: Mengontrol kekuatan modifikasi magnitudo
+- **Region Target**: Area frekuensi yang dimodifikasi (mid-frequency ideal)
+- **Kanal Warna**: Kanal yang digunakan untuk penyisipan (biasanya hijau)
+
+### 4. SVD (Singular Value Decomposition)
+
+SVD adalah faktoriasi matriks yang memecah gambar menjadi tiga matriks komponen: U, S, dan V^T. Nilai singular (diagonal matrix S) merepresentasikan energi gambar dan sangat stabil terhadap serangan.
+
+#### Algoritma Encoding:
+1. Gambar dibagi menjadi blok (biasanya 8x8 piksel)
+2. Kanal merah biasanya dipilih untuk penyisipan
+3. SVD diterapkan pada setiap blok, menghasilkan matriks U, S, dan V^T
+4. Nilai singular pertama (S[0]) dimodifikasi untuk menyisipkan bit pesan
+5. Bit 0 → Nilai singular dibuat menjadi kelipatan genap dari strength
+6. Bit 1 → Nilai singular dibuat menjadi kelipatan ganjil dari strength
+7. Blok direkonstruksi menggunakan U, S yang dimodifikasi, dan V^T
+8. Blok yang dimodifikasi disusun kembali untuk membentuk gambar stego
+
 ```python
-# Proses encoding
+# Proses encoding SVD
 U, S, Vt = np.linalg.svd(block, full_matrices=False)  # Dekomposisi nilai singular
 
 # Modifikasi nilai singular terbesar berdasarkan bit pesan
@@ -357,6 +242,102 @@ else:
 # Rekonstruksi blok
 modified_block = U @ np.diag(S) @ Vt
 ```
+
+#### Algoritma Decoding:
+1. Kanal merah dari gambar stego diekstrak dan dibagi menjadi blok
+2. SVD diterapkan pada setiap blok
+3. Nilai singular pertama (S[0]) diperiksa
+4. Jika nilai singular mendekati kelipatan genap → bit 0, jika mendekati kelipatan ganjil → bit 1
+5. Bit-bit dikumpulkan hingga urutan 8 bit nol (terminator) ditemukan
+6. Bit-bit dikonversi kembali ke teks
+
+#### Parameter Utama:
+- **Block Size**: Ukuran blok untuk SVD (biasanya 8x8)
+- **Strength**: Mengontrol kekuatan modifikasi nilai singular
+- **Kanal Warna**: Kanal yang digunakan untuk penyisipan (biasanya merah)
+
+### 5. LBP (Local Binary Pattern)
+
+LBP adalah operator tekstur yang mengkarakterisasi pola lokal gambar dengan membandingkan piksel pusat dengan piksel tetangganya, menghasilkan kode biner yang mewakili pola tekstur.
+
+#### Algoritma Encoding:
+1. Gambar dikonversi ke grayscale untuk perhitungan LBP
+2. Representasi LBP dihitung dengan parameter radius dan jumlah titik tetangga
+3. Nilai LBP dinormalisasi ke rentang 0-255
+4. Nilai-nilai LBP yang dipilih dimodifikasi untuk menyisipkan bit pesan:
+5. Bit 0 → Nilai LBP dibuat menjadi kelipatan genap dari strength
+6. Bit 1 → Nilai LBP dibuat menjadi kelipatan ganjil dari strength 
+7. Perubahan diterapkan ke saluran warna (biasanya biru) dengan atenuasi untuk meminimalkan distorsi visual
+
+```python
+# Proses encoding LBP
+gray = cv2.cvtColor(cover_img, cv2.COLOR_BGR2GRAY)
+lbp = local_binary_pattern(gray, n_points=24, radius=3, method='uniform')
+lbp_normalized = cv2.normalize(lbp, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+
+# Algoritma penyisipan bit 
+for y in range(h_start, h_end, 2):
+    for x in range(w_start, w_end, 4):  # Menggunakan setiap piksel ke-4 secara horizontal
+        bit = int(binary_message[message_index])
+        pixel_val = int(lbp_normalized[y, x])
+        
+        # Jika bit pesan adalah 0, ubah nilai LBP menjadi kelipatan genap dari strength
+        if bit == 0:
+            stego_lbp[y, x] = int(strength * np.floor(pixel_val / strength))
+        # Jika bit pesan adalah 1, ubah nilai LBP menjadi kelipatan ganjil dari strength
+        else:
+            stego_lbp[y, x] = int(strength * np.floor(pixel_val / strength) + strength / 2)
+
+# Menerapkan perubahan ke saluran biru
+for y in range(height):
+    for x in range(width):
+        if mask[y, x] == 255:  # Piksel yang berisi data pesan
+            # Terapkan nilai yang dimodifikasi dengan atenuasi untuk meminimalkan distorsi visual
+            diff = int(stego_lbp[y, x] - lbp_normalized[y, x])
+            stego_img[y, x, 0] = np.clip(cover_img[y, x, 0] + diff // 4, 0, 255)
+```
+
+#### Algoritma Decoding:
+1. Gambar stego dikonversi ke grayscale
+2. Representasi LBP dihitung dengan parameter yang sama seperti encoding
+3. Nilai piksel dari saluran biru pada lokasi yang digunakan untuk penyisipan diperiksa
+4. Jika nilai mendekati kelipatan genap → bit 0, jika mendekati kelipatan ganjil → bit 1
+5. Bit-bit dikumpulkan hingga urutan 8 bit nol (terminator) ditemukan
+6. Bit-bit dikonversi kembali ke teks
+
+```python
+# Proses decoding LBP
+# Untuk setiap piksel yang digunakan dalam encoding
+for y in range(h_start, h_end, 2):
+    for x in range(w_start, w_end, 4):
+        pixel_val = int(stego_img[y, x, 0])  # Menggunakan saluran biru
+        
+        # Memeriksa apakah nilai piksel adalah kelipatan genap atau ganjil dari strength
+        remainder = (pixel_val % strength) / strength
+        
+        # Jika nilai mendekati setengah langkah, maka bit adalah 1
+        if 0.35 < remainder < 0.65:
+            extracted_bits.append(1)
+        # Jika tidak, bit adalah 0
+        else:
+            extracted_bits.append(0)
+```
+
+#### Parameter Utama:
+- **Radius**: Jarak tetangga dari piksel pusat (biasanya 1-3)
+- **N_Points**: Jumlah titik sampel pada lingkaran (biasanya 8-24)
+- **Method**: Mode LBP ('uniform', 'default', 'ror')
+- **Strength**: Mengontrol kekuatan modifikasi nilai LBP
+- **Kanal Warna**: Kanal yang dimodifikasi berdasarkan LBP (biasanya biru)
+
+## Fitur
+
+- Berbagai teknik domain transform yang dapat dipilih
+- Kekuatan penyembunyian yang dapat disesuaikan
+- Antarmuka GUI dengan pratinjau gambar
+- Antarmuka web dengan Flask
+- Alat analisis gambar (histogram, perhitungan PSNR)
+- Dukungan untuk berbagai format gambar dan audio
 
 ## Persyaratan
 
