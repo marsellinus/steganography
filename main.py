@@ -9,6 +9,8 @@ from wavelet_stego import WaveletSteganography
 from dft_stego import DFTSteganography
 from svd_stego import SVDSteganography
 from lbp_stego import LBPSteganography
+from simple_dft_stego import SimpleDFTSteganography
+from reliable_stego import ReliableSteganography
 
 class SteganographyApp:
     def __init__(self, root):
@@ -295,36 +297,129 @@ class SteganographyApp:
         # Get the selected strength value
         strength = self.strength.get()
         
+        # Helper function to check if a message is valid
+        def is_valid_message(msg):
+            if not msg:
+                return False
+            # Check if message has enough printable characters
+            printable_chars = 0
+            for char in msg:
+                if 32 <= ord(char) <= 126:  # printable ASCII
+                    printable_chars += 1
+            return printable_chars > len(msg) * 0.7  # At least 70% should be printable
+        
         # Run decoding in a separate thread
         def decode_thread():
             try:
                 self.progress_var.set(40)
                 self.root.update_idletasks()
                 
-                if self.method.get() == "DCT":
-                    stego = DCTSteganography(quantization_factor=strength)
-                    message = stego.decode(self.stego_image_path)
-                elif self.method.get() == "Wavelet":
-                    stego = WaveletSteganography(threshold=strength)
-                    message = stego.decode(self.stego_image_path)
-                elif self.method.get() == "DFT":
-                    stego = DFTSteganography(strength=strength)
-                    message = stego.decode(self.stego_image_path)
-                elif self.method.get() == "SVD":
-                    stego = SVDSteganography(strength=strength)
-                    message = stego.decode(self.stego_image_path)
-                else:  # LBP
-                    stego = LBPSteganography(strength=strength)
-                    message = stego.decode(self.stego_image_path)
+                message = None
+                decode_error = None
+                found_strength = None
+                
+                try:
+                    # First try with the specified strength
+                    if self.method.get() == "DCT":
+                        stego = DCTSteganography(quantization_factor=strength)
+                        message = stego.decode(self.stego_image_path)
+                    elif self.method.get() == "Wavelet":
+                        stego = WaveletSteganography(threshold=strength)
+                        message = stego.decode(self.stego_image_path)
+                    elif self.method.get() in ["DFT", "SVD", "LBP"]:
+                        stego = ReliableSteganography(strength=strength)
+                        message = stego.decode(self.stego_image_path)
+                    
+                    # Validate the message
+                    if message and not is_valid_message(message):
+                        print("Message found but seems corrupt, trying auto-detection...")
+                        message = None  # Trigger auto-detection
+                    
+                    # If decoding failed or produced invalid results, try with different strength values
+                    if message is None or message.strip() == "":
+                        self.status_var.set("Trying different strength values...")
+                        
+                        # For DFT, try these specific values known to work well
+                        if self.method.get() == "DFT":
+                            test_strengths = [1.0, 1.5, 2.0, 3.0, 5.0, 8.0, 10.0, 12.0, 15.0, 20.0]
+                        else:
+                            test_strengths = [1.0, 5.0, 10.0, 15.0, 20.0, 25.0]
+
+                        for test_strength in test_strengths:
+                            if abs(test_strength - strength) < 0.1:
+                                continue  # Skip if very close to the original strength
+                            
+                            self.progress_var.set(40 + (test_strength / 50.0) * 30)  # Progressive update
+                            self.root.update_idletasks()
+                            
+                            try:
+                                if self.method.get() == "DFT":
+                                    stego = SimpleDFTSteganography(strength=test_strength)
+                                    test_message = stego.decode(self.stego_image_path)
+                                    
+                                    if test_message and is_valid_message(test_message):
+                                        message = test_message
+                                        found_strength = test_strength
+                                        break
+                                elif self.method.get() == "DCT":
+                                    stego = DCTSteganography(quantization_factor=test_strength)
+                                    test_message = stego.decode(self.stego_image_path)
+                                    
+                                    if test_message and is_valid_message(test_message):
+                                        message = test_message
+                                        found_strength = test_strength
+                                        break
+                                elif self.method.get() == "Wavelet":
+                                    stego = WaveletSteganography(threshold=test_strength)
+                                    test_message = stego.decode(self.stego_image_path)
+                                    
+                                    if test_message and is_valid_message(test_message):
+                                        message = test_message
+                                        found_strength = test_strength
+                                        break
+                                elif self.method.get() == "SVD":
+                                    stego = SVDSteganography(strength=test_strength)
+                                    test_message = stego.decode(self.stego_image_path)
+                                    
+                                    if test_message and is_valid_message(test_message):
+                                        message = test_message
+                                        found_strength = test_strength
+                                        break
+                                else:  # LBP
+                                    stego = LBPSteganography(strength=test_strength)
+                                    test_message = stego.decode(self.stego_image_path)
+                                    
+                                    if test_message and is_valid_message(test_message):
+                                        message = test_message
+                                        found_strength = test_strength
+                                        break
+                            except Exception:
+                                pass  # Ignore errors during auto-detection
+                                
+                except Exception as e:
+                    decode_error = str(e)
                 
                 self.progress_var.set(80)
                 self.root.update_idletasks()
+                
+                # Handle the result
+                if (message is None or message.strip() == "") and decode_error:
+                    self.root.after(0, lambda: messagebox.showerror("Decoding Error", 
+                                   f"Decoding failed: {decode_error}\n\nTry adjusting the strength parameter."))
+                    self.root.after(0, lambda: self.status_var.set("Decoding failed"))
+                    self.root.after(0, lambda: self.progress_var.set(0))
+                    return
+                
+                # Show success message if auto-detection worked
+                if found_strength is not None:
+                    self.root.after(0, lambda: messagebox.showinfo("Success", 
+                                   f"Successfully decoded using strength = {found_strength}"))
                 
                 # Update UI from the main thread
                 self.root.after(0, lambda: self.finish_decode(message))
                 
             except Exception as e:
-                # Handle errors on the main thread
+                # Handle general errors on the main thread
                 self.root.after(0, lambda: messagebox.showerror("Error", f"Decoding failed: {str(e)}"))
                 self.root.after(0, lambda: self.status_var.set("Decoding failed"))
                 self.root.after(0, lambda: self.progress_var.set(0))
@@ -334,10 +429,15 @@ class SteganographyApp:
     
     def finish_decode(self, message):
         if not message:
-            messagebox.showwarning("Warning", "No message found or decoding failed")
-        
-        self.extracted_text.delete("1.0", tk.END)
-        self.extracted_text.insert("1.0", message)
+            messagebox.showwarning("Warning", 
+                                  "No message found or decoding failed.\n\n"
+                                  "Tips:\n"
+                                  "1. Make sure you selected the correct steganography method.\n"
+                                  "2. Try adjusting the strength parameter to match the encoding strength.\n"
+                                  "3. Ensure the image hasn't been modified after encoding.")
+        else:
+            self.extracted_text.delete("1.0", tk.END)
+            self.extracted_text.insert("1.0", message)
         
         self.status_var.set("Decoding completed")
         self.progress_var.set(100)

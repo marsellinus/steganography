@@ -4,6 +4,25 @@
 
 Aplikasi ini mengimplementasikan berbagai teknik steganografi domain transform untuk menyembunyikan pesan rahasia dalam gambar dan audio. Tidak seperti metode domain spasial seperti LSB (Least Significant Bit), steganografi domain transform menanamkan data dalam koefisien transformasi media, sehingga lebih tahan terhadap berbagai serangan dan pemrosesan.
 
+## Metode Steganografi
+
+Aplikasi ini menyediakan beberapa metode steganografi berbasis transformasi domain:
+
+1. **DCT (Discrete Cosine Transform)** - Menyembunyikan pesan dalam koefisien frekuensi DCT
+2. **DFT (Discrete Fourier Transform)** - Menggunakan domain frekuensi Fourier untuk penyembunyian data
+3. **Wavelet Transform** - Memanfaatkan domain wavelet untuk penyisipan pesan
+4. **SVD (Singular Value Decomposition)** - Menggunakan dekomposisi nilai singular untuk steganografi
+5. **LBP (Local Binary Pattern)** - Menggabungkan fitur tekstur LBP dengan steganografi
+
+## Fitur Tambahan
+
+- Analisis perbandingan gambar asli dan stego
+- Perhitungan metrik kualitas (PSNR, MSE)
+- Visualisasi histogram
+- Deteksi perbedaan gambar
+- Dukungan untuk gambar berbagai format
+- Maximum file size: 32MB
+
 ## Teknik yang Diimplementasikan
 
 ### Steganografi Gambar
@@ -559,29 +578,39 @@ python app.py
 
 ## Penggunaan
 
-### Aplikasi Desktop
+### Menyembunyikan Pesan (Encode)
 
-1. Pilih metode transform (DCT, Wavelet, DFT, SVD, LBP)
-2. Sesuaikan kekuatan penyembunyian sesuai kebutuhan
-3. Untuk encoding:
-   - Pilih gambar cover
-   - Masukkan pesan rahasia Anda
-   - Klik "Encode" dan pilih di mana untuk menyimpan gambar stego
-4. Untuk decoding:
-   - Pilih gambar stego
-   - Pilih metode transform yang sama yang digunakan untuk encoding
-   - Klik "Decode" untuk mengekstrak pesan tersembunyi
+1. Pilih tab "Encode"
+2. Pilih gambar cover dengan mengklik tombol "Browse"
+3. Masukkan pesan rahasia pada kotak teks
+4. Pilih metode steganografi yang diinginkan
+5. Atur parameter embedding strength sesuai kebutuhan
+6. Klik tombol "Encode" untuk menyembunyikan pesan
+7. Pilih lokasi untuk menyimpan gambar stego
 
-### Aplikasi Web
+### Ekstraksi Pesan (Decode)
 
-1. Buka browser dan navigasi ke `http://127.0.0.1:5000/`
-2. Ikuti petunjuk di layar untuk encode atau decode gambar
+1. Pilih tab "Decode"
+2. Pilih gambar stego dengan mengklik tombol "Browse"
+3. Pilih metode steganografi yang sama dengan yang digunakan saat encode
+4. Atur parameter strength yang sama dengan yang digunakan saat encode
+5. Klik tombol "Decode" untuk mengekstrak pesan
+6. Pesan rahasia akan ditampilkan pada kotak teks
 
-## Alat Analisis
+### Analisis
 
-- **Bandingkan Gambar**: Visualisasikan perbedaan antara gambar asli dan stego
-- **Tampilkan Histogram**: Analisa distribusi warna
-- **Hitung PSNR**: Ukur kualitas gambar dan imperceptibility steganografi
+1. Pilih tab "Analysis"
+2. Gunakan fitur "Compare Images" untuk membandingkan gambar asli dan stego
+3. Gunakan "Show Histogram" untuk melihat distribusi nilai pixel
+4. Lihat hasil analisis PSNR untuk mengevaluasi kualitas steganografi
+
+## Troubleshooting
+
+Jika mengalami masalah saat decode:
+1. Pastikan menggunakan metode yang sama dengan saat encode
+2. Gunakan nilai strength yang sama dengan saat encode
+3. Pastikan file gambar tidak dimodifikasi/dikompresi setelah encode
+4. Jika pesan tidak dapat dibaca dengan benar, coba nilai strength yang berbeda
 
 ## Penulis
 
@@ -593,4 +622,14 @@ python app.py
 
 ## Lisensi
 
-Proyek ini dilisensikan di bawah Lisensi MIT - lihat file LICENSE untuk detail.
+MIT License
+
+## Pengembang
+
+Developed by [Your Name]
+
+## Catatan Teknis
+
+- Implementasi DFT, SVD, dan LBP menggunakan teknik LSB untuk keandalan yang lebih baik
+- Aplikasi mendukung dua antarmuka: desktop (Tkinter) dan web (Flask)
+- Pastikan dependensi terinstall dengan benar sebelum menjalankan aplikasi

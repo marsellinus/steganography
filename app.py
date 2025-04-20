@@ -8,11 +8,12 @@ import math
 
 from dct_stego import DCTSteganography
 from wavelet_stego import WaveletSteganography
-from dft_stego import DFTSteganography
-from svd_stego import SVDSteganography
-from lbp_stego import LBPSteganography
+from reliable_stego import ReliableSteganography
 from audio_dct_stego import AudioDCTSteganography
 from audio_wavelet_stego import AudioWaveletSteganography
+from simple_dft_stego import SimpleDFTSteganography
+from svd_stego import SVDSteganography
+from lbp_stego import LBPSteganography
 
 # Make sure 'templates' folder exists and is properly detected
 template_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates')
@@ -25,7 +26,7 @@ app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__fil
 app.config['OUTPUT_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'outputs')
 app.config['TEMP_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'temp')
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'bmp'}
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload size
+app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # Increased to 32MB max upload size
 
 # Create necessary folders if they don't exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -85,7 +86,7 @@ def encode():
                 stego = WaveletSteganography(threshold=strength)
                 stego.encode(cover_image_path, secret_message, output_path)
             elif method == 'DFT':
-                stego = DFTSteganography(strength=strength)
+                stego = SimpleDFTSteganography(strength=strength)
                 stego.encode(cover_image_path, secret_message, output_path)
             elif method == 'SVD':
                 stego = SVDSteganography(strength=strength)
@@ -147,27 +148,79 @@ def decode():
             stego_image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(stego_image_path)
             
-            # Apply steganography decoding based on selected method
-            if method == 'DCT':
-                stego = DCTSteganography(quantization_factor=strength)
-                message = stego.decode(stego_image_path)
-            elif method == 'Wavelet':
-                stego = WaveletSteganography(threshold=strength)
-                message = stego.decode(stego_image_path)
-            elif method == 'DFT':
-                stego = DFTSteganography(strength=strength)
-                message = stego.decode(stego_image_path)
-            elif method == 'SVD':
-                stego = SVDSteganography(strength=strength)
-                message = stego.decode(stego_image_path)
-            else:  # LBP
-                stego = LBPSteganography(strength=strength)
-                message = stego.decode(stego_image_path)
+            # Helper function to check if a message is valid
+            def is_valid_message(msg):
+                if not msg:
+                    return False
+                # Check if message has enough printable characters
+                printable_chars = 0
+                for char in msg:
+                    if 32 <= ord(char) <= 126:  # printable ASCII
+                        printable_chars += 1
+                return printable_chars > len(msg) * 0.7  # At least 70% should be printable
             
-            # Only consider completely empty messages as a failure
-            # A message with just whitespace is still a valid result
-            if message is None:
-                flash("No hidden message found or unable to decode properly")
+            # Try a range of strength values if decoding fails
+            message = None
+            decode_error = None
+            found_strength = None
+            
+            try:
+                # First try with the specified strength
+                if method == 'DCT':
+                    stego = DCTSteganography(quantization_factor=strength)
+                    message = stego.decode(stego_image_path)
+                elif method == 'Wavelet':
+                    stego = WaveletSteganography(threshold=strength)
+                    message = stego.decode(stego_image_path)
+                elif method == 'DFT':
+                    stego = SimpleDFTSteganography(strength=strength)
+                    message = stego.decode(stego_image_path)
+                elif method == 'SVD':
+                    stego = SVDSteganography(strength=strength)
+                    message = stego.decode(stego_image_path)
+                elif method == 'LBP':
+                    stego = LBPSteganography(strength=strength)
+                    message = stego.decode(stego_image_path)
+                
+                # Validate the message
+                if message and not is_valid_message(message):
+                    print("Message found but seems corrupt, trying auto-detection...")
+                    message = None  # Trigger auto-detection
+                
+                # If decoding failed, try with different strength values
+                if message is None or message.strip() == "":
+                    # For DFT, try these specific values known to work well
+                    if method == 'DFT':
+                        test_strengths = [1.0, 1.5, 2.0, 3.0, 5.0, 8.0, 10.0, 12.0, 15.0, 20.0]
+                    else:
+                        test_strengths = [1.0, 5.0, 10.0, 15.0, 20.0, 25.0]
+                    
+                    for test_strength in test_strengths:
+                        if abs(test_strength - strength) < 0.1:
+                            continue  # Skip if very close to the original strength
+                        
+                        try:
+                            if method == 'DFT':
+                                stego = SimpleDFTSteganography(strength=test_strength)
+                                test_message = stego.decode(stego_image_path)
+                                
+                                if test_message and is_valid_message(test_message):
+                                    message = test_message
+                                    found_strength = test_strength
+                                    flash(f"Successfully decoded using strength = {test_strength}")
+                                    break
+                        except Exception:
+                            pass  # Ignore errors in automatic strength detection
+                            
+            except Exception as e:
+                decode_error = str(e)
+            
+            # Only consider completely empty messages or invalid messages as failures
+            if message is None or message.strip() == "" or not is_valid_message(message):
+                if decode_error:
+                    flash(f"Decoding error: {decode_error}. Try adjusting the strength parameter.")
+                else:
+                    flash("No hidden message found or message corrupted. Try adjusting the strength parameter.")
                 return redirect(request.url)
                 
             # Render result with extracted message
@@ -341,16 +394,21 @@ def audio_decode():
             file.save(stego_audio_path)
             
             # Apply audio steganography decoding based on selected method
-            if method == 'DCT':
-                stego = AudioDCTSteganography(quantization_factor=strength)
-                message = stego.decode(stego_audio_path)
-            else:  # Wavelet
-                stego = AudioWaveletSteganography(threshold=strength)
-                message = stego.decode(stego_audio_path)
+            message = None
+            try:
+                if method == 'DCT':
+                    stego = AudioDCTSteganography(quantization_factor=strength)
+                    message = stego.decode(stego_audio_path)
+                else:  # Wavelet
+                    stego = AudioWaveletSteganography(threshold=strength)
+                    message = stego.decode(stego_audio_path)
+            except Exception as decode_error:
+                flash(f"Decoding error: {str(decode_error)}. Try adjusting the strength parameter.")
+                return redirect(request.url)
             
             # Only consider completely empty messages as a failure
             if message is None:
-                flash("No hidden message found or unable to decode properly")
+                flash("No hidden message found. Try adjusting the strength parameter to match the encoding strength.")
                 return redirect(request.url)
                 
             # Render result with extracted message

@@ -1,186 +1,164 @@
-import numpy as np
 import cv2
-from PIL import Image
+import numpy as np
 
 class DFTSteganography:
     def __init__(self, strength=10.0):
         self.strength = strength
-    
+        self.terminator = '00000000'  # 8 zeros as terminator
+        
     def encode(self, cover_image_path, message, output_path):
-        """
-        Hide a message in a cover image using DFT transform domain steganography
-        
-        Args:
-            cover_image_path: Path to the cover image
-            message: Secret message to hide
-            output_path: Where to save the resulting stego image
-        """
-        # Convert message to binary
-        binary_message = ''.join(format(ord(c), '08b') for c in message)
-        binary_message += '00000000'  # Add terminator
-        
-        # Load the cover image
-        cover_img = cv2.imread(cover_image_path, cv2.IMREAD_COLOR)
-        if cover_img is None:
-            raise ValueError("Could not load cover image")
-        
-        # Work with the green channel for DFT
-        green_channel = cover_img[:, :, 1].astype(np.float32)
-        
-        # Apply DFT
-        dft = cv2.dft(green_channel, flags=cv2.DFT_COMPLEX_OUTPUT)
-        dft_shift = np.fft.fftshift(dft)  # Shift zero frequency to the center
-        
-        rows, cols = green_channel.shape
-        crow, ccol = rows // 2, cols // 2  # Center of the image
-        
-        # Create a mask for the region where we'll hide data
-        # We choose mid-frequency components for embedding
-        mask = np.zeros((rows, cols, 2), np.uint8)
-        r_min = crow - rows // 8
-        r_max = crow - rows // 16
-        c_min = ccol - cols // 8
-        c_max = ccol + cols // 8
-        
-        # Check if we can fit the message
-        embed_capacity = (r_max - r_min) * (c_max - c_min)
-        if len(binary_message) > embed_capacity:
-            raise ValueError(f"Message too long! Max {embed_capacity} bits, got {len(binary_message)}")
-        
-        # Embed the message in the magnitude of selected components
-        message_index = 0
-        
-        for i in range(r_min, r_max):
-            if message_index >= len(binary_message):
-                break
-                
-            for j in range(c_min, c_max):
-                if message_index >= len(binary_message):
-                    break
-                
-                # Get magnitude
-                magnitude = np.sqrt(dft_shift[i, j, 0]**2 + dft_shift[i, j, 1]**2)
-                
-                # Embed bit
-                bit = int(binary_message[message_index])
-                
-                if bit == 0:
-                    # Make magnitude even multiple of strength
-                    new_magnitude = self.strength * np.floor(magnitude / self.strength)
-                else:
-                    # Make magnitude odd multiple of strength
-                    new_magnitude = self.strength * np.floor(magnitude / self.strength) + self.strength / 2
-                
-                # If magnitude is close to zero, enforce minimum
-                if new_magnitude < self.strength / 2:
-                    new_magnitude = self.strength / 2 if bit == 1 else self.strength
-                
-                # Calculate scaling factor for real and imaginary components
-                if magnitude > 0:
-                    scale = new_magnitude / magnitude
-                    
-                    # Apply scaling to real and imaginary components
-                    dft_shift[i, j, 0] *= scale
-                    dft_shift[i, j, 1] *= scale
-                
-                message_index += 1
-        
-        # Inverse shift and inverse DFT
-        dft_ishift = np.fft.ifftshift(dft_shift)
-        img_back = cv2.idft(dft_ishift)
-        img_back = cv2.magnitude(img_back[:, :, 0], img_back[:, :, 1])
-        
-        # Normalize the values to the range [0, 255]
-        img_back = cv2.normalize(img_back, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
-        
-        # Create stego image by replacing the green channel
-        stego_img = cover_img.copy()
-        stego_img[:, :, 1] = img_back
-        
-        # Save the stego image
-        cv2.imwrite(output_path, stego_img)
-        
-        return output_path
-    
-    def decode(self, stego_image_path):
-        """
-        Extract hidden message from a stego image using DFT transform domain
-        
-        Args:
-            stego_image_path: Path to the stego image
+        # Load the image - preserve color channels
+        img = cv2.imread(cover_image_path)
+        if img is None:
+            raise ValueError("Could not read the cover image")
             
-        Returns:
-            Extracted message as a string
-        """
-        # Load the stego image
-        stego_img = cv2.imread(stego_image_path, cv2.IMREAD_COLOR)
-        if stego_img is None:
-            raise ValueError("Could not load stego image")
+        # Convert message to binary
+        binary_message = ''.join(format(ord(char), '08b') for char in message) + self.terminator
+        message_length = len(binary_message)
         
-        # Extract green channel
-        green_channel = stego_img[:, :, 1].astype(np.float32)
-        
-        # Apply DFT
-        dft = cv2.dft(green_channel, flags=cv2.DFT_COMPLEX_OUTPUT)
+        # Process the blue channel for embedding
+        blue = img[:,:,0].copy()
+        rows, cols = blue.shape
+            
+        # Apply DFT to blue channel
+        blue_float = np.float32(blue)
+        dft = cv2.dft(blue_float, flags=cv2.DFT_COMPLEX_OUTPUT)
         dft_shift = np.fft.fftshift(dft)
         
-        rows, cols = green_channel.shape
-        crow, ccol = rows // 2, cols // 2
+        # Get magnitude and phase
+        magnitude, phase = cv2.cartToPolar(dft_shift[:,:,0], dft_shift[:,:,1])
         
-        # Define the same region used during embedding
-        r_min = crow - rows // 8
-        r_max = crow - rows // 16
-        c_min = ccol - cols // 8
-        c_max = ccol + cols // 8
-        
-        # Extract bits
-        extracted_bits = []
-        
-        for i in range(r_min, r_max):
-            for j in range(c_min, c_max):
-                # Get magnitude
-                magnitude = np.sqrt(dft_shift[i, j, 0]**2 + dft_shift[i, j, 1]**2)
-                
-                # Check if magnitude is even or odd multiple of strength
-                # Allow some tolerance for numerical precision
-                remainder = (magnitude % self.strength) / self.strength
-                
-                if 0.35 < remainder < 0.65:  # Close to half-step
-                    extracted_bits.append(1)
-                else:
-                    extracted_bits.append(0)
-                
-                # Check for terminator sequence
-                if len(extracted_bits) >= 8 and extracted_bits[-8:] == [0, 0, 0, 0, 0, 0, 0, 0]:
-                    # Found terminator, remove it and stop
-                    return self._bits_to_message(extracted_bits[:-8])
-        
-        # If no terminator was found, try to convert all bits
-        return self._bits_to_message(extracted_bits)
-    
-    def _bits_to_message(self, bits):
-        """Convert a sequence of bits to an ASCII message"""
-        if not bits:
-            return ""
+        # Ensure the image is large enough for the message
+        if rows * cols < message_length:
+            raise ValueError(f"Cover image too small for the message. Maximum capacity: {rows * cols} bits")
             
-        # Make sure we have a multiple of 8 bits
-        while len(bits) % 8 != 0:
-            bits.append(0)
+        # Embed message in magnitude - focusing on mid-frequency components
+        start_row, start_col = rows//4, cols//4
         
-        # Convert each byte to a character
-        message = ""
-        for i in range(0, len(bits), 8):
-            if i + 8 <= len(bits):
-                byte = bits[i:i+8]
-                try:
-                    char_code = int(''.join(map(str, byte)), 2)
-                    # Only accept printable ASCII characters
-                    if 32 <= char_code <= 126:
-                        message += chr(char_code)
-                    else:
-                        # Found a non-printable character, might be end of message
-                        break
-                except:
+        idx = 0
+        for i in range(start_row, 3*start_row):
+            if idx >= message_length:
+                break
+            for j in range(start_col, 3*start_col):
+                if idx >= message_length:
                     break
+                    
+                # Skip DC component (center of the spectrum)
+                if i == rows//2 and j == cols//2:
+                    continue
+                    
+                # Modify magnitude values to embed message bit
+                bit = int(binary_message[idx])
+                
+                # Use a simple even/odd encoding - more robust
+                if bit == 1:
+                    # Make magnitude odd when bit is 1
+                    if int(magnitude[i, j]) % 2 == 0:
+                        magnitude[i, j] += 1
+                else:
+                    # Make magnitude even when bit is 0
+                    if int(magnitude[i, j]) % 2 == 1:
+                        magnitude[i, j] += 1
+                idx += 1
+                
+        # Convert back to cartesian coordinates
+        dft_shift[:,:,0], dft_shift[:,:,1] = cv2.polarToCart(magnitude, phase)
         
-        return message
+        # Inverse shift
+        idft_shift = np.fft.ifftshift(dft_shift)
+        
+        # Inverse DFT
+        idft = cv2.idft(idft_shift)
+        blue_back = cv2.magnitude(idft[:,:,0], idft[:,:,1])
+        
+        # Normalize and update only the blue channel
+        blue_modified = np.uint8(cv2.normalize(blue_back, None, 0, 255, cv2.NORM_MINMAX))
+        
+        # Create stego image by combining the modified blue channel with original green and red
+        stego_img = img.copy()
+        stego_img[:,:,0] = blue_modified
+        
+        # Save the image
+        cv2.imwrite(output_path, stego_img)
+        
+    def decode(self, stego_image_path):
+        # Load the stego image
+        img = cv2.imread(stego_image_path)
+        if img is None:
+            raise ValueError("Could not read the stego image")
+            
+        # Get the blue channel for decoding
+        blue = img[:,:,0]
+        rows, cols = blue.shape
+            
+        # Apply DFT to blue channel
+        blue_float = np.float32(blue)
+        dft = cv2.dft(blue_float, flags=cv2.DFT_COMPLEX_OUTPUT)
+        dft_shift = np.fft.fftshift(dft)
+        
+        # Get magnitude and phase
+        magnitude, phase = cv2.cartToPolar(dft_shift[:,:,0], dft_shift[:,:,1])
+        
+        # Extract message from magnitude - focusing on same mid-frequency components
+        start_row, start_col = rows//4, cols//4
+        
+        # Extract message from magnitude
+        binary_message = ""
+        
+        for i in range(start_row, 3*start_row):
+            for j in range(start_col, 3*start_col):
+                # Skip DC component
+                if i == rows//2 and j == cols//2:
+                    continue
+                    
+                # Extract bit using same even/odd approach
+                bit = '1' if int(magnitude[i, j]) % 2 == 1 else '0'
+                binary_message += bit
+                
+                # Check for terminator
+                if len(binary_message) >= len(self.terminator) and binary_message[-len(self.terminator):] == self.terminator:
+                    # Found terminator, remove it from message
+                    binary_message = binary_message[:-len(self.terminator)]
+                    
+                    # Convert binary to text
+                    text_message = ""
+                    for k in range(0, len(binary_message), 8):
+                        if k + 8 <= len(binary_message):
+                            byte = binary_message[k:k+8]
+                            try:
+                                text_message += chr(int(byte, 2))
+                            except:
+                                pass  # Skip invalid characters
+                    
+                    # Clean the output - remove non-printable characters
+                    cleaned_message = ""
+                    for char in text_message:
+                        if ord(char) >= 32 and ord(char) <= 126 or ord(char) in [9, 10, 13]:  # printable + whitespace
+                            cleaned_message += char
+                    
+                    return cleaned_message
+                
+                # Avoid excessive searching
+                if len(binary_message) > 8192:  # 1KB of bits is enough for most text messages
+                    break
+                    
+            if len(binary_message) > 8192:
+                break
+                    
+        # If we reached this point, terminator not found
+        # Try recovering partial message anyway
+        if len(binary_message) > 24:  # At least a few characters
+            partial_message = ""
+            for k in range(0, min(len(binary_message), 800), 8):  # Limit to 100 characters
+                if k + 8 <= len(binary_message):
+                    byte = binary_message[k:k+8]
+                    try:
+                        char = chr(int(byte, 2))
+                        if ord(char) >= 32 and ord(char) <= 126 or ord(char) in [9, 10, 13]:
+                            partial_message += char
+                    except:
+                        pass  # Skip invalid bytes
+            
+            return partial_message if partial_message else None
+            
+        return None
