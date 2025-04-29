@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Analysis Results - Steganography</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/steganography.css') }}">
+    <!-- Alpine.js for interactivity -->
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- AOS Animation -->
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+</head>
+<body class="bg-gray-50">
+    <div class="container mx-auto px-4 py-10 max-w-6xl">
+        <nav class="mb-6">
+            <ol class="flex text-sm text-gray-600">
+                <li><a href="{{ url_for('index') }}" class="text-blue-600 hover:text-blue-800">Home</a></li>
+                <li class="mx-2">/</li>
+                <li><a href="{{ url_for('audio_analyze') }}" class="text-blue-600 hover:text-blue-800">Analyze Audio</a></li>
+                <li class="mx-2">/</li>
+                <li class="text-gray-800">Results</li>
+            </ol>
+        </nav>
+
+        <h1 class="text-3xl font-bold text-gray-800 mb-6">Audio Analysis Results</h1>
+        
+        <div data-aos="fade-up" data-aos-duration="800" class="bg-white rounded-lg shadow-md mb-8 overflow-hidden">
+            <div class="border-b px-6 py-4 bg-gradient-to-r from-gray-50 to-gray-100">
+                <h2 class="text-xl font-semibold text-gray-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    Audio Quality Metrics
+                </h2>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-4" data-aos="fade-up" data-aos-delay="100">
+                    <!-- PSNR Metric Card -->
+                    <div class="bg-gray-50 rounded-lg p-6 text-center border border-gray-200">
+                        <h3 class="text-sm uppercase tracking-wide text-gray-600 mb-1">Peak Signal-to-Noise Ratio</h3>
+                        <p class="text-3xl font-bold text-purple-700">{{ "{:.2f}".format(metrics.psnr) }} dB</p>
+                        <p class="mt-2 text-xs text-gray-600">Higher is better. PSNR > 30dB is generally good quality.</p>
+                    </div>
+                    
+                    <!-- SNR Metric Card -->
+                    <div class="bg-gray-50 rounded-lg p-6 text-center border border-gray-200">
+                        <h3 class="text-sm uppercase tracking-wide text-gray-600 mb-1">Signal-to-Noise Ratio</h3>
+                        <p class="text-3xl font-bold text-purple-700">{{ "{:.2f}".format(metrics.snr) }} dB</p>
+                        <p class="mt-2 text-xs text-gray-600">Higher is better. Measures signal power compared to noise.</p>
+                    </div>
+                    
+                    <!-- MSE Metric Card -->
+                    <div class="bg-gray-50 rounded-lg p-6 text-center border border-gray-200">
+                        <h3 class="text-sm uppercase tracking-wide text-gray-600 mb-1">Mean Squared Error</h3>
+                        <p class="text-3xl font-bold text-purple-700">{{ "{:.8f}".format(metrics.mse) }}</p>
+                        <p class="mt-2 text-xs text-gray-600">Lower is better. Measure of signal distortion.</p>
+                    </div>
+                    
+                    <!-- LSD Metric Card -->
+                    <div class="bg-gray-50 rounded-lg p-6 text-center border border-gray-200">
+                        <h3 class="text-sm uppercase tracking-wide text-gray-600 mb-1">Log-Spectral Distance</h3>
+                        <p class="text-3xl font-bold text-purple-700">{{ "{:.4f}".format(metrics.lsd) }}</p>
+                        <p class="mt-2 text-xs text-gray-600">Lower is better. Measures spectral differences.</p>
+                    </div>
+                    
+                    <!-- Histogram Correlation Card -->
+                    <div class="bg-gray-50 rounded-lg p-6 text-center border border-gray-200">
+                        <h3 class="text-sm uppercase tracking-wide text-gray-600 mb-1">Histogram Correlation</h3>
+                        <p class="text-3xl font-bold text-purple-700">{{ "{:.4f}".format(metrics.histogram_correlation) }}</p>
+                        <p class="mt-2 text-xs text-gray-600">Closer to 1.0 is better. Statistical similarity.</p>
+                    </div>
+                </div>
+                
+                <div class="mt-6 p-4 bg-{{ quality_color }}-50 rounded-lg border-l-4 border-{{ quality_color }}-500" data-aos="fade-up" data-aos-delay="200">
+                    <h3 class="font-medium text-{{ quality_color }}-800">Quality Assessment</h3>
+                    <p class="text-{{ quality_color }}-700">{{ quality_text }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Histogram Analysis Section -->
+        <div data-aos="fade-up" data-aos-duration="800" class="bg-white rounded-lg shadow-md mb-8 overflow-hidden">
+            <div class="border-b px-6 py-4 bg-gradient-to-r from-gray-50 to-gray-100">
+                <h2 class="text-xl font-semibold text-gray-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                    </svg>
+                    Histogram Analysis
+                </h2>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6" data-aos="fade-up" data-aos-delay="100">
+                    <div>
+                        <h3 class="text-center font-medium mb-2">Original Audio Histogram</h3>
+                        <div class="border rounded-lg">
+                            <img src="{{ url_for('temp_file', filename=histogram_orig) }}" alt="Original Audio Histogram" class="w-full">
+                        </div>
+                    </div>
+                    <div>
+                        <h3 class="text-center font-medium mb-2">Stego Audio Histogram</h3>
+                        <div class="border rounded-lg">
+                            <img src="{{ url_for('temp_file', filename=histogram_stego) }}" alt="Stego Audio Histogram" class="w-full">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-6" data-aos="fade-up" data-aos-delay="200">
+                    <h3 class="text-center font-medium mb-2">Histogram Comparison</h3>
+                    <div class="border rounded-lg">
+                        <img src="{{ url_for('temp_file', filename=histogram_comparison) }}" alt="Histogram Comparison" class="w-full">
+                    </div>
+                    
+                    <div class="mt-4 p-4 bg-orange-50 rounded-lg">
+                        <h4 class="font-medium text-orange-800 mb-1">About Histogram Analysis</h4>
+                        <p class="text-orange-700 text-sm">The histogram shows the distribution of amplitude values in the audio. 
+                        Similar histograms between original and stego audio indicate good steganography. 
+                        A correlation value close to 1.0 means the audio statistics are well preserved.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        {% if has_waveform_analysis %}
+        <div data-aos="fade-up" data-aos-duration="800" class="bg-white rounded-lg shadow-md mb-8 overflow-hidden">
+            <div class="border-b px-6 py-4 bg-gradient-to-r from-gray-50 to-gray-100">
+                <h2 class="text-xl font-semibold text-gray-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    Waveform Comparison
+                </h2>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6" data-aos="fade-up" data-aos-delay="100">
+                    <div>
+                        <h3 class="text-center font-medium mb-2">Original Audio Waveform</h3>
+                        <div class="border rounded-lg">
+                            <img src="{{ url_for('temp_file', filename=waveform_orig) }}" alt="Original Audio Waveform" class="w-full">
+                        </div>
+                    </div>
+                    <div>
+                        <h3 class="text-center font-medium mb-2">Stego Audio Waveform</h3>
+                        <div class="border rounded-lg">
+                            <img src="{{ url_for('temp_file', filename=waveform_stego) }}" alt="Stego Audio Waveform" class="w-full">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-6" data-aos="fade-up" data-aos-delay="200">
+                    <h3 class="text-center font-medium mb-2">Difference Waveform (Amplified 50x)</h3>
+                    <div class="border rounded-lg">
+                        <img src="{{ url_for('temp_file', filename=waveform_diff) }}" alt="Difference Waveform" class="w-full">
+                    </div>
+                    <p class="mt-2 text-sm text-gray-600 text-center">Note: The difference has been amplified by a factor of 50 to make it visible.</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if has_spectrogram_analysis %}
+        <div data-aos="fade-up" data-aos-duration="800" class="bg-white rounded-lg shadow-md mb-8 overflow-hidden">
+            <div class="border-b px-6 py-4 bg-gradient-to-r from-gray-50 to-gray-100">
+                <h2 class="text-xl font-semibold text-gray-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                    </svg>
+                    Spectrogram Analysis
+                </h2>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6" data-aos="fade-up" data-aos-delay="100">
+                    <div>
+                        <h3 class="text-center font-medium mb-2">Original Audio Spectrogram</h3>
+                        <div class="border rounded-lg">
+                            <img src="{{ url_for('temp_file', filename=spectrogram_orig) }}" alt="Original Audio Spectrogram" class="w-full">
+                        </div>
+                    </div>
+                    <div>
+                        <h3 class="text-center font-medium mb-2">Stego Audio Spectrogram</h3>
+                        <div class="border rounded-lg">
+                            <img src="{{ url_for('temp_file', filename=spectrogram_stego) }}" alt="Stego Audio Spectrogram" class="w-full">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-4 p-4 bg-blue-50 rounded-lg" data-aos="fade-up" data-aos-delay="200">
+                    <h4 class="font-medium text-blue-800 mb-1">About Spectrograms</h4>
+                    <p class="text-blue-700 text-sm">Spectrograms show how the frequency content of the audio changes over time. 
+                    Differences in the spectrograms may reveal where steganographic content has been embedded. 
+                    Minimal visible differences indicate effective steganography.</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if has_spectrum_analysis %}
+        <div data-aos="fade-up" data-aos-duration="800" class="bg-white rounded-lg shadow-md mb-8 overflow-hidden">
+            <div class="border-b px-6 py-4 bg-gradient-to-r from-gray-50 to-gray-100">
+                <h2 class="text-xl font-semibold text-gray-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    Frequency Spectrum
+                </h2>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6" data-aos="fade-up" data-aos-delay="100">
+                    <div>
+                        <h3 class="text-center font-medium mb-2">Original Frequency Spectrum</h3>
+                        <div class="border rounded-lg">
+                            <img src="{{ url_for('temp_file', filename=spectrum_orig) }}" alt="Original Frequency Spectrum" class="w-full">
+                        </div>
+                    </div>
+                    <div>
+                        <h3 class="text-center font-medium mb-2">Stego Frequency Spectrum</h3>
+                        <div class="border rounded-lg">
+                            <img src="{{ url_for('temp_file', filename=spectrum_stego) }}" alt="Stego Frequency Spectrum" class="w-full">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-4 p-4 bg-indigo-50 rounded-lg" data-aos="fade-up" data-aos-delay="200">
+                    <h4 class="font-medium text-indigo-800 mb-1">About Frequency Spectrum</h4>
+                    <p class="text-indigo-700 text-sm">The frequency spectrum shows the distribution of audio energy across different frequencies.
+                    Effective steganography should maintain a similar frequency distribution between the original and stego audio.
+                    Significant differences in specific frequency bands could reveal the presence of hidden data.</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <div class="flex justify-center space-x-4 mt-10" data-aos="fade-up" data-aos-delay="300">
+            <a href="{{ url_for('audio_analyze') }}" class="bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-6 rounded-md transition duration-300">
+                Analyze Another Audio
+            </a>
+            {% if report_path %}
+            <a href="{{ url_for('temp_file', filename=report_filename) }}" target="_blank" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-md transition duration-300">
+                View Full Report
+            </a>
+            {% endif %}
+            <a href="{{ url_for('index') }}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-6 rounded-md transition duration-300">
+                Back to Home
+            </a>
+        </div>
+    </div>
+    
+    <footer class="bg-gray-100 py-4 mt-10">
+        <div class="container mx-auto text-center">
+            <p class="text-gray-600 text-sm">Transform Domain Steganography Tool</p>
+        </div>
+    </footer>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            AOS.init();
+        });
+    </script>
+</body>
+</html>

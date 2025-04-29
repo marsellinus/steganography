@@ -577,6 +577,13 @@ python app.py
 1. Buka browser dan navigasi ke `http://127.0.0.1:5000/`
 2. Ikuti petunjuk di layar untuk encode atau decode gambar
 
+## Running the Application
+
+To run the web application:
+```
+python app.py
+```
+
 ## Alat Analisis
 
 - **Bandingkan Gambar**: Visualisasikan perbedaan antara gambar asli dan stego

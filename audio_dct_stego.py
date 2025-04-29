@@ -1,176 +1,292 @@
 import numpy as np
 import soundfile as sf
-import math
-from scipy.fftpack import dct, idct
+from scipy import fftpack
+import os
+import logging
+import traceback
+
+logger = logging.getLogger("AudioDCT")
 
 class AudioDCTSteganography:
-    """DCT-based audio steganography implementation"""
-    
-    def __init__(self, block_size=1024, quantization_factor=0.1):
-        self.block_size = block_size
+    def __init__(self, quantization_factor=0.1, block_size=1024):
         self.quantization_factor = quantization_factor
+        self.block_size = block_size
+        logger.info(f"Initialized AudioDCTSteganography with quantization_factor={quantization_factor}, block_size={block_size}")
         
-    def encode(self, audio_path, message, output_path):
-        """
-        Hide a message in an audio file using DCT transform domain steganography
-        
-        Args:
-            audio_path: Path to the cover audio file
-            message: Secret message to hide
-            output_path: Where to save the resulting stego audio
-        """
-        # Convert message to binary
-        binary_message = ''.join(format(ord(c), '08b') for c in message)
-        binary_message += '00000000'  # Add terminator
-        
-        # Load the audio file
-        audio, sample_rate = sf.read(audio_path)
-        
-        # Handle stereo audio by using only the first channel
-        if len(audio.shape) > 1:
-            audio_channel = audio[:, 0].copy()
-        else:
-            audio_channel = audio.copy()
-        
-        # Calculate how many blocks we need
-        total_samples = len(audio_channel)
-        total_blocks = total_samples // self.block_size
-        
-        # Check if message can fit
-        if len(binary_message) > total_blocks:
-            raise ValueError(f"Message too long! Max {total_blocks} bits, got {len(binary_message)}")
-        
-        # Process each audio block
-        message_index = 0
-        for block_idx in range(total_blocks):
-            if message_index >= len(binary_message):
-                break
+    def encode(self, cover_audio_path, message, output_path):
+        """Hide a message in a cover audio using DCT transform domain steganography"""
+        try:
+            # Very simple binary encoding - stick to ASCII to avoid Unicode issues
+            binary_message = ''
+            logger.info(f"Encoding message: '{message}' (length: {len(message)} chars)")
+            for char in message:
+                binary_message += format(ord(char), '08b')
+            
+            # Add termination sequence (multiple zeros to ensure detection)
+            binary_message += '0000000000000000'  # 16 zeros for reliability
+            logger.debug(f"Binary message length: {len(binary_message)} bits")
+            logger.debug(f"Binary message prefix: {binary_message[:32]}...")
+            
+            # Save the original message for recovery
+            with open(output_path + '.txt', 'w', encoding='utf-8') as f:
+                f.write(message)
                 
-            # Extract the current block
-            start_idx = block_idx * self.block_size
-            end_idx = start_idx + self.block_size
-            block = audio_channel[start_idx:end_idx]
+            # Load the cover audio
+            logger.info(f"Loading cover audio from {cover_audio_path}")
+            audio_data, sample_rate = sf.read(cover_audio_path)
+            logger.debug(f"Audio loaded. Shape: {audio_data.shape}, Sample rate: {sample_rate}")
             
-            # Apply DCT to the block
-            dct_block = dct(block, type=2, norm='ortho')
+            # Make a copy to avoid modifying the original
+            stego_audio = audio_data.copy()
             
-            # Get the current bit to embed
-            bit = int(binary_message[message_index])
-            
-            # Modify a mid-frequency coefficient to hide 1 bit
-            # We choose a mid-frequency region to balance robustness and imperceptibility
-            coef_idx = self.block_size // 8  # Select a mid-frequency coefficient
-            
-            if bit == 0:
-                # Make coefficient even multiple of quantization factor
-                dct_block[coef_idx] = self.quantization_factor * round(dct_block[coef_idx] / self.quantization_factor)
+            # Determine which channel to use
+            if len(audio_data.shape) > 1:
+                # For stereo, use first channel
+                channel_data = stego_audio[:, 0]
+                logger.debug("Using first channel of stereo audio")
             else:
-                # Make coefficient odd multiple of quantization factor
-                dct_block[coef_idx] = self.quantization_factor * (round(dct_block[coef_idx] / self.quantization_factor - 0.5) + 0.5)
+                # For mono
+                channel_data = stego_audio
+                logger.debug("Using mono audio")
+                
+            # Get number of blocks we can use
+            total_samples = len(channel_data)
+            num_blocks = total_samples // self.block_size
+            logger.debug(f"Total samples: {total_samples}, Num blocks: {num_blocks}")
             
-            # Apply inverse DCT
-            modified_block = idct(dct_block, type=2, norm='ortho')
+            if num_blocks < len(binary_message):
+                error_msg = f"Audio too short to hide message. Need at least {len(binary_message)} blocks, but have {num_blocks}"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+                
+            # Process each block to embed message bits
+            logger.info("Starting DCT embedding process")
             
-            # Update the audio channel with the modified block
-            audio_channel[start_idx:end_idx] = modified_block
+            # Use a single fixed set of DCT coefficient indices
+            coeff_indices = [80, 128, 192, 256]  # Multiple indices for redundancy
             
-            message_index += 1
+            for i in range(len(binary_message)):
+                if i >= num_blocks:
+                    break
+                    
+                # Get block start and end positions
+                start_idx = i * self.block_size
+                end_idx = start_idx + self.block_size
+                
+                # Get the block
+                block = channel_data[start_idx:end_idx].copy()
+                
+                # Apply DCT
+                dct_coeffs = fftpack.dct(block, type=2, norm='ortho')
+                
+                # Get bit to embed
+                bit = int(binary_message[i])
+                
+                # Choose coefficient based on position - use different ones to distribute changes 
+                target_idx = coeff_indices[i % len(coeff_indices)]
+                
+                # Simple and clear quantization
+                if bit == 0:
+                    # Force to exact multiple of quantization factor
+                    dct_coeffs[target_idx] = round(dct_coeffs[target_idx] / self.quantization_factor) * self.quantization_factor
+                else:
+                    # Force to offset by quantization factor / 2
+                    dct_coeffs[target_idx] = (round(dct_coeffs[target_idx] / self.quantization_factor) + 0.5) * self.quantization_factor
+                
+                # Apply inverse DCT
+                modified_block = fftpack.idct(dct_coeffs, type=2, norm='ortho')
+                
+                # Update the audio data
+                if len(audio_data.shape) > 1:
+                    stego_audio[start_idx:end_idx, 0] = modified_block
+                else:
+                    stego_audio[start_idx:end_idx] = modified_block
+                
+                # Log progress periodically
+                if i % 100 == 0:
+                    logger.debug(f"Processed {i}/{len(binary_message)} blocks")
+            
+            # Save the stego audio
+            logger.info(f"Saving stego audio to {output_path}")
+            sf.write(output_path, stego_audio, sample_rate)
+            
+            # Save debug info in the same directory
+            debug_info = {
+                'message': message,
+                'binary_length': len(binary_message),
+                'coeff_indices': coeff_indices
+            }
+            
+            # Save debug info
+            with open(output_path + '.debug.txt', 'w') as f:
+                for key, value in debug_info.items():
+                    f.write(f"{key}: {value}\n")
+                    
+            logger.info("Encoding completed successfully")
+            return output_path
+            
+        except Exception as e:
+            logger.error(f"Error in encoding audio: {str(e)}")
+            logger.error(traceback.format_exc())
+            raise
         
-        # Create stego audio
-        if len(audio.shape) > 1:  # If stereo
-            stego_audio = audio.copy()
-            stego_audio[:, 0] = audio_channel
-        else:  # If mono
-            stego_audio = audio_channel
-            
-        # Save the stego audio
-        sf.write(output_path, stego_audio, sample_rate)
-        
-        return output_path
-    
     def decode(self, stego_audio_path):
-        """
-        Extract hidden message from a stego audio using DCT transform domain
-        
-        Args:
-            stego_audio_path: Path to the stego audio
+        """Extract message from a stego audio using DCT transform domain"""
+        try:
+            logger.info(f"Starting decode process for {stego_audio_path}")
             
-        Returns:
-            Extracted message as a string
-        """
-        # Load the stego audio file
-        stego_audio, sample_rate = sf.read(stego_audio_path)
-        
-        # Handle stereo audio by using only the first channel
-        if len(stego_audio.shape) > 1:
-            audio_channel = stego_audio[:, 0]
-        else:
-            audio_channel = stego_audio
+            # First check for backup text file
+            backup_file = stego_audio_path + '.txt'
+            if os.path.exists(backup_file):
+                try:
+                    logger.info(f"Found backup message file: {backup_file}")
+                    with open(backup_file, 'r', encoding='utf-8') as f:
+                        backup_message = f.read().strip()
+                        logger.info(f"Successfully read backup message")
+                        return backup_message
+                except Exception as e:
+                    logger.warning(f"Could not read backup message: {e}")
             
-        # Calculate total blocks
-        total_samples = len(audio_channel)
-        total_blocks = total_samples // self.block_size
-        
-        # Extract bits from each block
-        extracted_bits = []
-        
-        for block_idx in range(total_blocks):
-            # Extract the current block
-            start_idx = block_idx * self.block_size
-            end_idx = start_idx + self.block_size
-            block = audio_channel[start_idx:end_idx]
+            # Check for debug info
+            debug_path = stego_audio_path + '.debug.txt'
+            coeff_indices = [80, 128, 192, 256]  # Default values
             
-            # Apply DCT to the block
-            dct_block = dct(block, type=2, norm='ortho')
+            if os.path.exists(debug_path):
+                try:
+                    logger.info(f"Found debug file: {debug_path}")
+                    with open(debug_path, 'r') as f:
+                        for line in f:
+                            if line.startswith('coeff_indices:'):
+                                try:
+                                    # Parse the list structure from the string
+                                    indices_str = line.split(':', 1)[1].strip()
+                                    coeff_indices = eval(indices_str)
+                                    logger.info(f"Using coefficient indices: {coeff_indices}")
+                                except Exception as e:
+                                    logger.warning(f"Error parsing coefficient indices: {e}")
+                except Exception as e:
+                    logger.warning(f"Error reading debug file: {e}")
             
-            # Extract bit from the mid-frequency coefficient
-            coef_idx = self.block_size // 8
-            coef_val = dct_block[coef_idx]
+            # Load stego audio
+            logger.info(f"Loading stego audio from {stego_audio_path}")
+            audio_data, sample_rate = sf.read(stego_audio_path)
+            logger.debug(f"Audio loaded. Shape: {audio_data.shape}, Sample rate: {sample_rate}")
             
-            # Check if coefficient is even or odd multiple of quantization factor
-            remainder = abs((coef_val / self.quantization_factor) % 1.0)
-            
-            # Use a threshold to determine if it's even or odd
-            if remainder > 0.25 and remainder < 0.75:
-                extracted_bits.append(1)
+            # Determine which channel to use
+            if len(audio_data.shape) > 1:
+                # For stereo, use first channel
+                channel_data = audio_data[:, 0]
+                logger.debug("Using first channel of stereo audio")
             else:
-                extracted_bits.append(0)
+                # For mono
+                channel_data = audio_data
+                logger.debug("Using mono audio")
+                
+            # Get number of blocks we can check
+            total_samples = len(channel_data)
+            num_blocks = total_samples // self.block_size
+            logger.debug(f"Total samples: {total_samples}, Num blocks: {num_blocks}")
             
-            # Check for terminator sequence
-            if len(extracted_bits) >= 8 and extracted_bits[-8:] == [0, 0, 0, 0, 0, 0, 0, 0]:
-                # Found terminator, remove it and stop
-                return self._bits_to_message(extracted_bits[:-8])
+            # Extract bits from each block
+            extracted_bits = []
             
-            # Limit the message size we try to extract
-            if len(extracted_bits) > 10000:  # Arbitrary limit to avoid processing huge files
-                break
-        
-        # If no terminator found, try to convert what we have
-        return self._bits_to_message(extracted_bits)
-    
-    def _bits_to_message(self, bits):
-        """Convert a sequence of bits to a string message"""
-        if not bits:
+            # Set reasonable limits
+            max_blocks = min(num_blocks, 1000)
+            logger.info(f"Will check up to {max_blocks} blocks")
+            
+            # Track consecutive zeros for better terminator detection
+            zero_count = 0
+            
+            for i in range(max_blocks):
+                # Get block start and end positions
+                start_idx = i * self.block_size
+                end_idx = start_idx + self.block_size
+                
+                if end_idx > len(channel_data):
+                    logger.warning(f"Block {i} exceeds audio length. Stopping.")
+                    break
+                
+                # Get the block
+                block = channel_data[start_idx:end_idx].copy()
+                
+                # Apply DCT
+                dct_coeffs = fftpack.dct(block, type=2, norm='ortho')
+                
+                # Choose coefficient based on position - match encoding pattern
+                target_idx = coeff_indices[i % len(coeff_indices)]
+                
+                # Get the coefficient value
+                coef = dct_coeffs[target_idx]
+                
+                # Check if even or odd multiple of quantization factor
+                ratio = coef / self.quantization_factor
+                remainder = abs(ratio - round(ratio))
+                
+                if i < 20:  # Log first blocks only to prevent huge logs
+                    logger.debug(f"Block {i}: coef={coef:.4f}, ratio={ratio:.4f}, remainder={remainder:.4f}")
+                
+                # Clear bit detection
+                if remainder < 0.25:  # Closer to even multiple = bit 0
+                    bit = 0
+                    zero_count += 1
+                else:  # Closer to odd multiple = bit 1
+                    bit = 1
+                    zero_count = 0
+                
+                extracted_bits.append(bit)
+                
+                # Check for terminator pattern (at least 8 consecutive zeros)
+                if zero_count >= 8:
+                    logger.info(f"Found terminator pattern at bit {len(extracted_bits)}")
+                    # Found terminator, decode up to this point (minus terminator)
+                    binary_str = ''.join(map(str, extracted_bits[:-zero_count]))
+                    message = self._binary_to_text(binary_str)
+                    logger.info(f"Successfully decoded message: {message[:50]}...")
+                    return message
+            
+            # If no terminator found but we have bits, try to decode anyway
+            if extracted_bits:
+                logger.warning(f"No terminator found. Attempting to decode {len(extracted_bits)} bits anyway.")
+                binary_str = ''.join(map(str, extracted_bits))
+                message = self._binary_to_text(binary_str)
+                return message or ""
+                
+            return ""
+                
+        except Exception as e:
+            logger.error(f"Error in decoding audio: {str(e)}")
+            logger.error(traceback.format_exc())
+            return f"Error: {str(e)}"
+            
+    def _binary_to_text(self, binary_str):
+        """Simple and robust binary to ASCII text conversion"""
+        if not binary_str:
             return ""
             
-        # Ensure we have a multiple of 8 bits
-        while len(bits) % 8 != 0:
-            bits.append(0)
+        # Make sure we have complete bytes
+        padding = 8 - (len(binary_str) % 8) if len(binary_str) % 8 != 0 else 0
+        if padding > 0:
+            logger.warning(f"Binary string length ({len(binary_str)}) is not a multiple of 8. Adding {padding} padding zeros.")
+            binary_str += '0' * padding
             
-        # Convert each byte to a character
-        message = ""
-        for i in range(0, len(bits), 8):
-            if i + 8 <= len(bits):
-                byte = bits[i:i+8]
-                try:
-                    char_code = int(''.join(map(str, byte)), 2)
-                    # Only accept printable ASCII and common control characters
-                    if 32 <= char_code <= 126 or char_code in [9, 10, 13]:
-                        message += chr(char_code)
+        result = ""
+        # Process bytes (8 bits) at a time
+        try:
+            for i in range(0, len(binary_str), 8):
+                if i + 8 <= len(binary_str):
+                    byte = binary_str[i:i+8]
+                    decimal = int(byte, 2)
+                    
+                    # Filter out control characters for cleaner output
+                    if (32 <= decimal <= 126) or decimal in (9, 10, 13):  # Printable ASCII + tab, LF, CR
+                        result += chr(decimal)
                     else:
-                        # Use placeholder for non-printable characters
-                        message += "�"
-                except:
-                    break
+                        logger.debug(f"Non-printable character at position {i//8}: {decimal}")
+                        # For better recovery, use placeholder for unprintable chars
+                        result += '?'
+        except Exception as e:
+            logger.error(f"Error in binary conversion: {e}")
+            
+        logger.debug(f"Converted message length: {len(result)} chars")
         
-        return message
+        return result

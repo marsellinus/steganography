@@ -7,9 +7,10 @@ Werkzeug==2.3.7
 jinja2==3.1.2
 itsdangerous==2.1.2
 click>=8.0.0
-matplotlib>=3.3.0
+matplotlib>=3.5.0  # Audio analysis dependencies
 scikit-image>=0.17.2  # For LBP and SSIM
 scipy>=1.5.0
 soundfile>=0.10.3     # For audio file I/O
 librosa>=0.8.1        # For audio processing
 sounddevice>=0.4.1    # For audio playback
+PySimpleGUI>=4.60.4   # For modern GUI interface

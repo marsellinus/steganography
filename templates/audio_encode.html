@@ -3,16 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Encode Audio - Steganography</title>
+    <title>Audio Encode - Steganography</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        #audio-preview {
+            display: none;
+            margin-top: 10px;
+        }
         .method-card {
             transition: all 0.2s ease;
             opacity: 0.7;
         }
         .method-card.selected {
-            border-color: #3b82f6;
+            border-color: #2dd4bf;
             opacity: 1;
         }
         input[type=range]::-webkit-slider-thumb {
@@ -20,7 +24,7 @@
             appearance: none;
             width: 20px;
             height: 20px;
-            background: #3b82f6;
+            background: #2dd4bf;
             border-radius: 50%;
             cursor: pointer;
         }
@@ -32,7 +36,7 @@
             <ol class="flex text-sm text-gray-600">
                 <li><a href="{{ url_for('index') }}" class="text-blue-600 hover:text-blue-800">Home</a></li>
                 <li class="mx-2">/</li>
-                <li class="text-gray-800">Encode Audio Message</li>
+                <li class="text-gray-800">Audio Encode</li>
             </ol>
         </nav>
 
@@ -52,20 +56,20 @@
             <div class="p-6">
                 <form action="{{ url_for('audio_encode') }}" method="post" enctype="multipart/form-data">
                     <div class="mb-6">
-                        <label class="block text-gray-700 text-sm font-bold mb-2">Transform Method:</label>
+                        <label class="block text-gray-700 text-sm font-bold mb-2">Audio Transform Method:</label>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div class="method-card selected border rounded-lg p-3 cursor-pointer bg-blue-50 hover:bg-blue-100" 
+                            <div class="method-card selected border rounded-lg p-3 cursor-pointer bg-teal-50 hover:bg-teal-100" 
                                  onclick="selectMethod(this, 'DCT')">
-                                <input type="radio" name="method" id="audio-dct" value="DCT" class="hidden" checked>
+                                <input type="radio" name="method" id="dct" value="DCT" class="hidden" checked>
                                 <div class="text-center">
                                     <div class="font-medium">DCT</div>
                                     <div class="text-xs text-gray-500">Discrete Cosine Transform</div>
                                 </div>
                             </div>
                             
-                            <div class="method-card border rounded-lg p-3 cursor-pointer hover:bg-blue-100" 
+                            <div class="method-card border rounded-lg p-3 cursor-pointer hover:bg-teal-100" 
                                  onclick="selectMethod(this, 'Wavelet')">
-                                <input type="radio" name="method" id="audio-wavelet" value="Wavelet" class="hidden">
+                                <input type="radio" name="method" id="wavelet" value="Wavelet" class="hidden">
                                 <div class="text-center">
                                     <div class="font-medium">Wavelet</div>
                                     <div class="text-xs text-gray-500">Wavelet Transform</div>
@@ -79,31 +83,34 @@
                         <div class="flex items-center">
                             <span class="text-gray-500 text-sm mr-2">Low</span>
                             <input type="range" id="strength" name="strength" min="0.01" max="0.5" step="0.01" value="0.1" 
+                                   oninput="updateStrength(this.value)"
                                    class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
                             <span class="text-gray-500 text-sm ml-2">High</span>
                         </div>
-                        <p class="text-xs text-gray-500 mt-1">Lower values have less impact on audio quality but may reduce decode reliability.</p>
+                        <p class="text-xs text-gray-500 mt-1">Current value: <span id="strength-value">0.1</span></p>
+                        <p class="text-xs text-gray-500">Higher values may ensure better message extraction but could affect audio quality.</p>
                     </div>
                     
                     <div class="mb-6">
                         <label for="cover_audio" class="block text-gray-700 text-sm font-bold mb-2">Cover Audio:</label>
-                        <input class="w-full text-gray-700 border border-gray-300 rounded py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                               type="file" id="cover_audio" name="cover_audio" accept="audio/*">
-                        <p class="text-gray-600 text-xs mt-1">Upload a WAV or FLAC audio file (.wav, .flac)</p>
-                        
-                        <div class="mt-4 text-center" id="audio-preview-container" style="display: none;">
-                            <audio id="audio-preview" controls class="w-full"></audio>
+                        <input class="w-full text-gray-700 border border-gray-300 rounded py-2 px-3 focus:outline-none focus:ring-2 focus:ring-teal-500" 
+                               type="file" id="cover_audio" name="cover_audio" accept="audio/*" onchange="previewAudio()">
+                        <p class="text-gray-600 text-xs mt-1">Upload a WAV, FLAC, MP3, or OGG audio file.</p>
+                        <div class="mt-4 text-center">
+                            <audio id="audio-preview" controls class="mx-auto"></audio>
                         </div>
                     </div>
                     
                     <div class="mb-6">
                         <label for="secret_message" class="block text-gray-700 text-sm font-bold mb-2">Secret Message:</label>
-                        <textarea class="w-full text-gray-700 border border-gray-300 rounded py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                                  id="secret_message" name="secret_message" rows="5" required></textarea>
+                        <textarea class="w-full text-gray-700 border border-gray-300 rounded py-2 px-3 focus:outline-none focus:ring-2 focus:ring-teal-500" 
+                                  id="secret_message" name="secret_message" rows="5" required maxlength="1000"></textarea>
+                                  <p class="text-xs text-gray-500 mt-1">Message should be primarily ASCII text for best compatibility. (Max 1000 chars)</p>
+                                  <p class="text-xs text-gray-500" id="char-counter"></p>
                     </div>
                     
                     <div class="text-center">
-                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-8 rounded-md transition duration-300">
+                        <button type="submit" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-8 rounded-md transition duration-300">
                             Encode Message
                         </button>
                     </div>
@@ -111,10 +118,10 @@
             </div>
         </div>
         
-        <div class="mt-8 bg-blue-50 border border-blue-200 rounded p-4">
-            <h3 class="font-medium text-blue-800 mb-2">Audio Steganography Information</h3>
-            <div id="method-info" class="text-sm text-blue-700">
-                <p><strong>DCT (Discrete Cosine Transform):</strong> Hides data in frequency coefficients of the audio signal. This method modifies mid-frequency components to minimize audible changes.</p>
+        <div class="mt-8 bg-teal-50 border border-teal-200 rounded p-4">
+            <h3 class="font-medium text-teal-800 mb-2">Audio Steganography Information</h3>
+            <div id="method-info" class="text-sm text-teal-700">
+                <p><strong>DCT (Discrete Cosine Transform):</strong> Hides data in frequency coefficients of audio. This technique modifies mid-frequency components of the audio signal, which are less perceptible to human ears.</p>
             </div>
         </div>
     </div>
@@ -126,32 +133,63 @@
     </footer>
     
     <script>
-        function selectMethod(element, method) {
-            // Update radio selection
-            document.getElementById('audio-' + method.toLowerCase()).checked = true;
+        function previewAudio() {
+            const preview = document.getElementById('audio-preview');
+            const file = document.getElementById('cover_audio').files[0];
             
-            // Update UI
-            document.querySelectorAll('.method-card').forEach(card => {
-                card.classList.remove('selected', 'bg-blue-50');
-            });
-            
-            element.classList.add('selected', 'bg-blue-50');
-            
-            // Update method info
-            const methodInfo = document.getElementById('method-info');
-            if (method === 'DCT') {
-                methodInfo.innerHTML = '<p><strong>DCT (Discrete Cosine Transform):</strong> Hides data in frequency coefficients of the audio signal. This method modifies mid-frequency components to minimize audible changes.</p>';
-            } else if (method === 'Wavelet') {
-                methodInfo.innerHTML = '<p><strong>Wavelet Transform:</strong> Embeds data in wavelet coefficients of the audio signal, offering good localization in both time and frequency domains. More robust against certain types of audio processing.</p>';
+            if (file) {
+                const url = URL.createObjectURL(file);
+                preview.src = url;
+                preview.style.display = 'block';
+            } else {
+                preview.src = '';
+                preview.style.display = 'none';
             }
         }
         
-        document.getElementById('cover_audio').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (file) {
-                const audio = document.getElementById('audio-preview');
-                audio.src = URL.createObjectURL(file);
-                document.getElementById('audio-preview-container').style.display = 'block';
+        function selectMethod(element, method) {
+            // Update radio selection
+            document.getElementById(method.toLowerCase()).checked = true;
+            
+            // Update UI
+            document.querySelectorAll('.method-card').forEach(card => {
+                card.classList.remove('selected', 'bg-teal-50');
+            });
+            
+            element.classList.add('selected', 'bg-teal-50');
+            
+            // Update method info
+            const methodInfo = document.getElementById('method-info');
+            switch(method) {
+                case 'DCT':
+                    methodInfo.innerHTML = '<p><strong>DCT (Discrete Cosine Transform):</strong> Hides data in frequency coefficients of audio. This technique modifies mid-frequency components of the audio signal, which are less perceptible to human ears.</p>';
+                    break;
+                case 'Wavelet':
+                    methodInfo.innerHTML = '<p><strong>Wavelet Transform:</strong> Embeds data in wavelet coefficients, offering efficient time-frequency localization. This approach provides good balance between robustness and imperceptibility.</p>';
+                    break;
+            }
+        }
+        
+        function updateStrength(value) {
+            document.getElementById('strength-value').textContent = value;
+        }
+        
+        // Character counter
+        document.getElementById('secret_message').addEventListener('input', function() {
+            const count = this.value.length;
+            const counter = document.getElementById('char-counter');
+            counter.textContent = `${count} / 1000 characters`;
+            
+            // Simple check for ASCII vs Unicode
+            let nonAsciiCount = 0;
+            for (let i = 0; i < this.value.length; i++) {
+                if (this.value.charCodeAt(i) > 127) {
+                    nonAsciiCount++;
+                }
+            }
+            
+            if (nonAsciiCount > 0) {
+                counter.innerHTML += ` <span style="color: #e11d48;">(${nonAsciiCount} non-ASCII characters may not encode correctly)</span>`;
             }
         });
     </script>

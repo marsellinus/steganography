@@ -5,6 +5,14 @@ from werkzeug.utils import secure_filename
 import cv2
 import numpy as np
 import math
+import logging
+import sys
+try:
+    from logging_config import configure_logging
+except ImportError:
+    # Simple fallback if the module is not found
+    def configure_logging(app):
+        return app
 
 from dct_stego import DCTSteganography
 from wavelet_stego import WaveletSteganography
@@ -13,6 +21,9 @@ from svd_stego import SVDSteganography
 from lbp_stego import LBPSteganography
 from audio_dct_stego import AudioDCTSteganography
 from audio_wavelet_stego import AudioWaveletSteganography
+from unicode_handler import text_to_binary_unicode, binary_to_text_unicode, sanitize_text
+from binary_decoder import binary_to_text
+from audio_analyzer import AudioAnalyzer
 
 # Make sure 'templates' folder exists and is properly detected
 template_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates')
@@ -25,12 +36,14 @@ app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__fil
 app.config['OUTPUT_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'outputs')
 app.config['TEMP_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'temp')
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'bmp'}
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload size
+app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # 32MB max upload size (ditingkatkan dari 16MB)
 
 # Create necessary folders if they don't exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['OUTPUT_FOLDER'], exist_ok=True)
 os.makedirs(app.config['TEMP_FOLDER'], exist_ok=True)
+
+app = configure_logging(app)
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
@@ -61,6 +74,9 @@ def encode():
         if not secret_message:
             flash('Please enter a secret message')
             return redirect(request.url)
+            
+        # Sanitize message to handle potentially corrupted Unicode
+        secret_message = sanitize_text(secret_message)
         
         # Method selection
         method = request.form.get('method', 'DCT')
@@ -362,6 +378,157 @@ def audio_decode():
     
     return render_template('audio_decode.html')
 
+@app.route('/audio/analyze', methods=['GET', 'POST'])
+def audio_analyze():
+    """Audio analysis page for comparing original and stego audio"""
+    if request.method == 'POST':
+        # Check if files were uploaded
+        if 'original_audio' not in request.files or 'stego_audio' not in request.files:
+            flash('Please upload both original and stego audio files')
+            return redirect(request.url)
+            
+        original_file = request.files['original_audio']
+        stego_file = request.files['stego_audio']
+        
+        if original_file.filename == '' or stego_file.filename == '':
+            flash('Please upload both original and stego audio files')
+            return redirect(request.url)
+            
+        # Get selected analysis types
+        analysis_types = request.form.getlist('analysis_type[]')
+        if not analysis_types:
+            analysis_types = ['waveform', 'spectrogram', 'spectrum', 'quality', 'histogram']  # Default to all
+            
+        try:
+            # Save the uploaded files
+            original_filename = secure_filename(original_file.filename)
+            stego_filename = secure_filename(stego_file.filename)
+            
+            original_path = os.path.join(app.config['UPLOAD_FOLDER'], original_filename)
+            stego_path = os.path.join(app.config['UPLOAD_FOLDER'], stego_filename)
+            
+            original_file.save(original_path)
+            stego_file.save(stego_path)
+            
+            # Set output directory to temp folder
+            output_dir = app.config['TEMP_FOLDER']
+            
+            # Generate unique base name for output files
+            import uuid
+            base_name = f"audio_analysis_{uuid.uuid4().hex[:8]}"
+            
+            # Create audio analyzer instance
+            analyzer = AudioAnalyzer(temp_dir=output_dir)
+            
+            # Perform the analysis
+            result = analyzer.analyze_audio_pair(original_path, stego_path, base_name)
+            
+            if "error" in result:
+                flash(f"Error in audio analysis: {result['error']}")
+                return redirect(request.url)
+                
+            # Get file paths from result
+            visualizations = result['visualizations']
+            metrics = result['metrics']
+            report_path = result['report_path']
+            
+            # Get filenames only (not full paths)
+            waveform_orig = os.path.basename(visualizations['waveform_orig'])
+            waveform_stego = os.path.basename(visualizations['waveform_stego'])
+            waveform_diff = os.path.basename(visualizations['difference'])
+            spectrogram_orig = os.path.basename(visualizations['spectrogram_orig'])
+            spectrogram_stego = os.path.basename(visualizations['spectrogram_stego'])
+            spectrum_orig = os.path.basename(visualizations['spectrum_orig'])
+            spectrum_stego = os.path.basename(visualizations['spectrum_stego'])
+            histogram_orig = os.path.basename(visualizations['histogram_orig'])
+            histogram_stego = os.path.basename(visualizations['histogram_stego'])
+            histogram_comparison = os.path.basename(visualizations['histogram_comparison'])
+            
+            # Create metrics object for the template
+            metrics_obj = type('Metrics', (), {
+                'snr': metrics['SNR'],
+                'psnr': metrics['PSNR'],
+                'lsd': metrics['LSD'],
+                'mse': metrics['MSE'],
+                'histogram_correlation': metrics['histogram_correlation']
+            })
+            
+            # Get report filename
+            report_filename = os.path.basename(report_path)
+            
+            # Render the results
+            return render_template('audio_analyze_result.html',
+                                  metrics=metrics_obj,
+                                  quality_text=metrics['quality_rating'],
+                                  quality_color=metrics['quality_color'],
+                                  waveform_orig=waveform_orig,
+                                  waveform_stego=waveform_stego,
+                                  waveform_diff=waveform_diff,
+                                  spectrogram_orig=spectrogram_orig,
+                                  spectrogram_stego=spectrogram_stego,
+                                  spectrum_orig=spectrum_orig,
+                                  spectrum_stego=spectrum_stego,
+                                  histogram_orig=histogram_orig,
+                                  histogram_stego=histogram_stego,
+                                  histogram_comparison=histogram_comparison,
+                                  has_waveform_analysis='waveform' in analysis_types,
+                                  has_spectrogram_analysis='spectrogram' in analysis_types,
+                                  has_spectrum_analysis='spectrum' in analysis_types,
+                                  has_histogram_analysis='histogram' in analysis_types,
+                                  report_filename=report_filename,
+                                  report_path=report_path)
+                                  
+        except Exception as e:
+            flash(f"Error analyzing audio: {str(e)}")
+            return redirect(request.url)
+    
+    return render_template('audio_analyze.html')
+
+@app.route('/binary', methods=['GET', 'POST'])
+def binary_decode():
+    """Binary decoder page for converting binary to text"""
+    decoded_text = None
+    binary_input = None
+    
+    if request.method == 'POST':
+        binary_input = request.form.get('binary_input', '')
+        try_multiple = 'try_multiple_encodings' in request.form
+        
+        # Clean binary input (keep only 0s, 1s and whitespace)
+        clean_binary = ''.join(c for c in binary_input if c in '01 \n\t')
+        binary_only = ''.join(c for c in clean_binary if c in '01')
+        
+        if not binary_only:
+            flash("No valid binary data found. Please enter a valid binary string.")
+            return render_template('binary_decoder.html')
+        
+        try:
+            if try_multiple:
+                # Use enhanced Unicode handler for better encoding support
+                decoded_text = binary_to_text_unicode(binary_only)
+            else:
+                # Use basic decoder
+                decoded_text = binary_to_text(binary_only)
+        except Exception as e:
+            flash(f"Error decoding binary: {str(e)}")
+    
+    return render_template('binary_decoder.html', decoded_text=decoded_text, binary_input=binary_input)
+
+@app.route('/uploads/<filename>')
+def uploaded_file(filename):
+    """Serve files from the UPLOAD_FOLDER directory"""
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+@app.route('/outputs/<filename>')
+def output_file(filename):
+    """Serve files from the OUTPUT_FOLDER directory"""
+    return send_from_directory(app.config['OUTPUT_FOLDER'], filename)
+
+@app.route('/temp/<filename>')
+def temp_file(filename):
+    """Serve files from the TEMP_FOLDER directory"""
+    return send_from_directory(app.config['TEMP_FOLDER'], filename)
+
 def calculate_image_quality(original_path, stego_path):
     """Calculate PSNR and MSE between two images"""
     original = cv2.imread(original_path)
@@ -422,38 +589,19 @@ def create_difference_image(original_path, stego_path, output_path):
     
     return output_path
 
-@app.route('/generate_histogram/<filename>')
-def generate_histogram(filename):
-    """Generate histogram data for the given image"""
-    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    if not os.path.exists(file_path):
-        return jsonify({'error': 'File not found'})
+if __name__ == '__main__':
+    print("="*80)
+    print("Transform Domain Steganography Web Application")
+    print("="*80)
+    print("Server is starting...")
+    print("Open your browser and navigate to: http://127.0.0.1:5000/")
+    print("Press Ctrl+C to stop the server")
+    print("="*80)
     
     try:
-        img = cv2.imread(file_path)
-        hist_data = {
-            'r': cv2.calcHist([img], [0], None, [256], [0, 256]).flatten().tolist(),
-            'g': cv2.calcHist([img], [1], None, [256], [0, 256]).flatten().tolist(),
-            'b': cv2.calcHist([img], [2], None, [256], [0, 256]).flatten().tolist(),
-        }
-        return jsonify(hist_data)
+        app.logger.info("Starting the application")
+        app.run(debug=True, host='127.0.0.1', port=5000)
     except Exception as e:
-        return jsonify({'error': str(e)})
-
-@app.route('/uploads/<filename>')
-def uploaded_file(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
-
-@app.route('/outputs/<filename>')
-def output_file(filename):
-    return send_from_directory(app.config['OUTPUT_FOLDER'], filename)
-
-@app.route('/temp/<filename>')
-def temp_file(filename):
-    return send_from_directory(app.config['TEMP_FOLDER'], filename)
-
-if __name__ == '__main__':
-    print("Flask app starting on http://127.0.0.1:5000/")
-    print(f"Template directory: {template_dir}")
-    print(f"Static directory: {static_dir}")
-    app.run(debug=True)
+        app.logger.error(f"Error starting the application: {str(e)}")
+        print(f"Error: {str(e)}")
+        sys.exit(1)

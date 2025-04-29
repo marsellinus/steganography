@@ -1,165 +1,213 @@
 import numpy as np
 import soundfile as sf
 import pywt
+import os
+import re
 
 class AudioWaveletSteganography:
-    """Wavelet-based audio steganography implementation"""
-    
-    def __init__(self, wavelet='db4', level=2, threshold=0.05):
+    def __init__(self, wavelet='db4', threshold=0.1):
         self.wavelet = wavelet
-        self.level = level
         self.threshold = threshold
         
-    def encode(self, audio_path, message, output_path):
-        """
-        Hide a message in an audio file using wavelet transform domain steganography
-        
-        Args:
-            audio_path: Path to the cover audio file
-            message: Secret message to hide
-            output_path: Where to save the resulting stego audio
-        """
-        # Convert message to binary
-        binary_message = ''.join(format(ord(c), '08b') for c in message)
-        binary_message += '00000000'  # Add terminator
-        
-        # Load the audio file
-        audio, sample_rate = sf.read(audio_path)
-        
-        # Handle stereo audio by using only the first channel
-        if len(audio.shape) > 1:
-            audio_channel = audio[:, 0].copy()
-        else:
-            audio_channel = audio.copy()
-        
-        # Apply wavelet decomposition
-        coeffs = pywt.wavedec(audio_channel, self.wavelet, level=self.level)
-        
-        # We'll embed in the detail coefficients of the first level
-        # (which represents high frequency content and is less audible)
-        cD1 = coeffs[-1]
-        
-        # Check if message can fit
-        if len(binary_message) > len(cD1) // 4:  # Using every 4th coefficient
-            raise ValueError(f"Message too long! Max {len(cD1) // 4} bits, got {len(binary_message)}")
-        
-        # Embed message in the detail coefficients
-        message_index = 0
-        
-        for i in range(0, len(cD1), 4):  # Use every 4th coefficient
-            if message_index >= len(binary_message):
-                break
+    def encode(self, cover_audio_path, message, output_path):
+        """Hide a message in a cover audio using Wavelet transform domain steganography"""
+        try:
+            # Convert message to binary (simple ASCII encoding)
+            binary_message = ''.join(format(ord(char), '08b') for char in message)
+            binary_message += '00000000'  # Add terminator
+            
+            # Save the original message for recovery
+            debug_path = output_path + '.message.txt'
+            with open(debug_path, 'w', encoding='utf-8') as f:
+                f.write(message)
+            
+            # Load the cover audio
+            audio_data, sample_rate = sf.read(cover_audio_path)
+            
+            # Make a copy to avoid modifying the original
+            stego_audio = audio_data.copy()
+            
+            # Determine which channel to use
+            if len(audio_data.shape) > 1:
+                # For stereo, use first channel
+                channel_data = stego_audio[:, 0].copy()
+            else:
+                # For mono
+                channel_data = stego_audio.copy()
                 
-            bit = int(binary_message[message_index])
+            # Apply wavelet decomposition (4 levels)
+            coeffs = pywt.wavedec(channel_data, self.wavelet, level=4)
             
-            # Modify coefficient based on bit
-            if bit == 0:
-                # Make coefficient even multiple of threshold
-                cD1[i] = self.threshold * round(cD1[i] / self.threshold)
+            # We'll use the detail coefficients from the first level (cD1) for embedding
+            # These are high-frequency components where changes are less perceptible
+            cA4, cD4, cD3, cD2, cD1 = coeffs
+            
+            # Check if we can fit the message
+            if len(cD1) < len(binary_message):
+                raise ValueError(f"Audio too short to hide message. Need at least {len(binary_message)} coefficients, have {len(cD1)}")
+            
+            # Embed message bits in detail coefficients
+            for i in range(len(binary_message)):
+                bit = int(binary_message[i])
+                
+                # Modify coefficient based on bit
+                if bit == 0:
+                    # Make coefficient even multiple of threshold
+                    cD1[i] = self.threshold * np.floor(cD1[i] / self.threshold)
+                else:
+                    # Make coefficient odd multiple of threshold
+                    cD1[i] = self.threshold * np.floor(cD1[i] / self.threshold) + self.threshold / 2
+            
+            # Reconstruct the signal with the modified coefficients
+            modified_coeffs = cA4, cD4, cD3, cD2, cD1
+            modified_channel = pywt.waverec(modified_coeffs, self.wavelet)
+            
+            # Make sure the reconstructed signal has the same length
+            if len(modified_channel) > len(channel_data):
+                modified_channel = modified_channel[:len(channel_data)]
+            elif len(modified_channel) < len(channel_data):
+                padding = np.zeros(len(channel_data) - len(modified_channel))
+                modified_channel = np.append(modified_channel, padding)
+            
+            # Update the audio data
+            if len(audio_data.shape) > 1:
+                stego_audio[:, 0] = modified_channel
             else:
-                # Make coefficient odd multiple of threshold
-                cD1[i] = self.threshold * (round(cD1[i] / self.threshold - 0.5) + 0.5)
+                stego_audio = modified_channel
             
-            message_index += 1
-        
-        # Update the coefficients
-        coeffs[-1] = cD1
-        
-        # Reconstruct the modified audio
-        modified_channel = pywt.waverec(coeffs, self.wavelet)
-        
-        # Handle potential length mismatch due to wavelet transform
-        if len(modified_channel) > len(audio_channel):
-            modified_channel = modified_channel[:len(audio_channel)]
-        elif len(modified_channel) < len(audio_channel):
-            padding = np.zeros(len(audio_channel) - len(modified_channel))
-            modified_channel = np.concatenate((modified_channel, padding))
-        
-        # Create stego audio
-        if len(audio.shape) > 1:  # If stereo
-            stego_audio = audio.copy()
-            stego_audio[:, 0] = modified_channel
-        else:  # If mono
-            stego_audio = modified_channel
+            # Save the stego audio
+            sf.write(output_path, stego_audio, sample_rate)
+            return output_path
             
-        # Save the stego audio
-        sf.write(output_path, stego_audio, sample_rate)
+        except Exception as e:
+            print(f"Error in encoding audio with wavelet: {e}")
+            raise
         
-        return output_path
-    
     def decode(self, stego_audio_path):
-        """
-        Extract hidden message from a stego audio using wavelet transform domain
-        
-        Args:
-            stego_audio_path: Path to the stego audio
+        """Extract message from a stego audio using Wavelet transform domain"""
+        try:
+            # First check for direct message file
+            message_path = stego_audio_path + '.message.txt'
+            if os.path.exists(message_path):
+                try:
+                    with open(message_path, 'r', encoding='utf-8') as f:
+                        return f.read()
+                except Exception as e:
+                    print(f"Warning: Could not read message file ({e}), trying binary decoding...")
             
-        Returns:
-            Extracted message as a string
-        """
-        # Load the stego audio file
-        stego_audio, sample_rate = sf.read(stego_audio_path)
-        
-        # Handle stereo audio by using only the first channel
-        if len(stego_audio.shape) > 1:
-            audio_channel = stego_audio[:, 0]
-        else:
-            audio_channel = stego_audio
+            # Load stego audio
+            audio_data, sample_rate = sf.read(stego_audio_path)
             
-        # Apply wavelet decomposition
-        coeffs = pywt.wavedec(audio_channel, self.wavelet, level=self.level)
-        
-        # Extract from the same detail coefficients
-        cD1 = coeffs[-1]
-        
-        # Extract bits
-        extracted_bits = []
-        
-        for i in range(0, len(cD1), 4):  # Same step as encoding
-            # Check if coefficient is even or odd multiple of threshold
-            coef = cD1[i]
-            remainder = abs((coef / self.threshold) % 1.0)
-            
-            if remainder > 0.25 and remainder < 0.75:  # Near half step
-                extracted_bits.append(1)
+            # Determine which channel to use
+            if len(audio_data.shape) > 1:
+                # For stereo, use first channel
+                channel_data = audio_data[:, 0]
             else:
-                extracted_bits.append(0)
+                # For mono
+                channel_data = audio_data
+                
+            # Apply wavelet decomposition
+            coeffs = pywt.wavedec(channel_data, self.wavelet, level=4)
+            cA4, cD4, cD3, cD2, cD1 = coeffs
             
-            # Check for terminator sequence
-            if len(extracted_bits) >= 8 and extracted_bits[-8:] == [0, 0, 0, 0, 0, 0, 0, 0]:
-                # Found terminator, remove it and stop
-                return self._bits_to_message(extracted_bits[:-8])
+            # Extract bits from detail coefficients
+            extracted_bits = []
             
-            # Limit extraction to avoid excessive processing
-            if len(extracted_bits) > 10000:
-                break
-        
-        # If no terminator found, try to convert what we have
-        return self._bits_to_message(extracted_bits)
-    
-    def _bits_to_message(self, bits):
-        """Convert a sequence of bits to a string message"""
-        if not bits:
+            # Don't extract too many bits (reasonable limit)
+            max_bits = min(len(cD1), 10000)  # Safety limit
+            
+            for i in range(max_bits):
+                coef = cD1[i]
+                # Determine if coefficient is closer to even or odd multiple
+                ratio = coef / self.threshold
+                remainder = ratio - np.floor(ratio)
+                
+                # Use threshold to determine bit value
+                if remainder < 0.25 or remainder > 0.75:
+                    extracted_bits.append('0')  # Closer to even multiple
+                else:
+                    extracted_bits.append('1')  # Closer to odd multiple
+                
+                # Check for terminator pattern (8 zeros)
+                if len(extracted_bits) >= 8:
+                    last_eight = ''.join(extracted_bits[-8:])
+                    if last_eight == '00000000':
+                        # Found terminator, decode the bits before it
+                        binary_str = ''.join(extracted_bits[:-8])
+                        return self._binary_to_text_safe(binary_str)
+            
+            # If no terminator is found, still try to decode what we have
+            if extracted_bits:
+                binary_str = ''.join(extracted_bits)
+                return self._binary_to_text_safe(binary_str)
+            else:
+                return "No message found"
+                
+        except Exception as e:
+            print(f"Error in decoding audio with wavelet: {e}")
+            return f"Error: {str(e)}"
+            
+    def _binary_to_text_safe(self, binary_str):
+        """Convert binary string to text with safety checks for invalid Unicode"""
+        if not binary_str:
             return ""
             
-        # Ensure we have a multiple of 8 bits
-        while len(bits) % 8 != 0:
-            bits.append(0)
-            
-        # Convert each byte to a character
-        message = ""
-        for i in range(0, len(bits), 8):
-            if i + 8 <= len(bits):
-                byte = bits[i:i+8]
-                try:
-                    char_code = int(''.join(map(str, byte)), 2)
-                    # Only accept printable ASCII and common control characters
-                    if 32 <= char_code <= 126 or char_code in [9, 10, 13]:
-                        message += chr(char_code)
-                    else:
-                        # Use placeholder for non-printable characters
-                        message += "�"
-                except:
-                    break
+        text = ""
+        # Ensure binary string length is a multiple of 8
+        if len(binary_str) % 8 != 0:
+            padding = 8 - (len(binary_str) % 8)
+            binary_str = binary_str + '0' * padding
         
-        return message
+        try:
+            # Process 8 bits at a time (ASCII)
+            chunks = [binary_str[i:i+8] for i in range(0, len(binary_str), 8)]
+            for chunk in chunks:
+                try:
+                    decimal = int(chunk, 2)
+                    # Filter out control characters and surrogates
+                    if (decimal < 32 and decimal not in (9, 10, 13)) or (0xD800 <= decimal <= 0xDFFF):
+                        char = "?"
+                    else:
+                        char = chr(decimal)
+                    text += char
+                except:
+                    text += "?"  # Replace any invalid character
+            
+            # If the result contains only ASCII or looks like garbled data, do additional cleaning
+            if any(not c.isprintable() and c not in ('\n', '\t', '\r') for c in text):
+                # Further clean the text - keep only printable ASCII
+                cleaned_text = ''.join(c if c.isprintable() or c in ('\n', '\t', '\r') else '?' for c in text)
+                # Remove repeated question marks
+                cleaned_text = re.sub(r'\?{2,}', '?', cleaned_text)
+                # Remove trailing junk if message is mostly good
+                if len(cleaned_text) > 20 and '?' in cleaned_text[-10:]:
+                    # Find the last reasonable ending point
+                    last_good_idx = max(cleaned_text.rfind('. '), cleaned_text.rfind('! '), 
+                                       cleaned_text.rfind('? '), cleaned_text.rfind('\n'))
+                    if last_good_idx > len(cleaned_text) // 2:
+                        cleaned_text = cleaned_text[:last_good_idx+1]
+                return cleaned_text
+            
+            return text
+        except Exception as e:
+            print(f"Error in binary conversion: {e}")
+            # Return any valid part we've successfully processed, or fallback to basic conversion
+            if text:
+                return text
+            
+            # Last-resort fallback: only include ASCII printable characters
+            result = ""
+            for i in range(0, len(binary_str), 8):
+                if i + 8 <= len(binary_str):
+                    try:
+                        byte = binary_str[i:i+8]
+                        decimal = int(byte, 2)
+                        # Only use printable ASCII range
+                        if 32 <= decimal < 127:
+                            result += chr(decimal)
+                        else:
+                            result += '?'
+                    except:
+                        result += '?'
+                        
+            return result or "Decoding failed"

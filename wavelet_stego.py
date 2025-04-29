@@ -2,6 +2,8 @@ import numpy as np
 import pywt
 import cv2
 from PIL import Image
+# Import fungsi unicode handler baru
+from unicode_handler import text_to_binary_unicode, binary_to_text_unicode
 
 class WaveletSteganography:
     def __init__(self, wavelet='haar', level=1, threshold=30):
@@ -18,8 +20,8 @@ class WaveletSteganography:
             message: Secret message to hide
             output_path: Where to save the resulting stego image
         """
-        # Convert message to binary
-        binary_message = ''.join(format(ord(c), '08b') for c in message)
+        # Gunakan fungsi unicode handler untuk encoding
+        binary_message = text_to_binary_unicode(message)
         binary_message += '00000000'  # Add terminator
         
         # Load the cover image
@@ -147,29 +149,12 @@ class WaveletSteganography:
         return message if message else ""
 
     def _bits_to_message(self, bits):
-        """Helper method to convert bit array to ASCII text"""
+        """Helper method to convert bit array to text with proper Unicode support"""
         if not bits:
             return ""
             
-        # Ensure bits length is multiple of 8
-        while len(bits) % 8 != 0:
-            bits.append(0)
-            
-        message = ""
-        # Convert each byte to a character
-        for i in range(0, len(bits), 8):
-            if i + 8 <= len(bits):
-                byte = bits[i:i+8]
-                try:
-                    char_code = int(''.join(map(str, byte)), 2)
-                    # Accept a wider range of characters
-                    if 32 <= char_code <= 126 or char_code in [9, 10, 13]:
-                        message += chr(char_code)
-                    else:
-                        # Instead of breaking, continue with a placeholder
-                        message += "�"
-                except:
-                    # If conversion fails, we've likely hit the end
-                    break
+        # Konversi bit array ke string untuk diproses
+        binary_str = ''.join(map(str, bits))
         
-        return message
+        # Gunakan fungsi unicode handler untuk dekode
+        return binary_to_text_unicode(binary_str)

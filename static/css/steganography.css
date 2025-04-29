@@ -147,3 +147,128 @@ body {
         min-width: 100px;
     }
 }
+
+/* Image Comparison Slider */
+.comparison-container {
+    position: relative;
+    overflow: hidden;
+    border-radius: 8px;
+    margin: 1rem 0;
+}
+
+.comparison-image {
+    width: 100%;
+    display: block;
+}
+
+.comparison-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 50%;
+    overflow: hidden;
+    border-right: 2px solid white;
+}
+
+.comparison-overlay img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 200%; /* Double width to account for the clipping */
+    max-width: none;
+    height: 100%;
+}
+
+.comparison-handle {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background-color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: ew-resize;
+    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.1);
+}
+
+.comparison-handle::before, 
+.comparison-handle::after {
+    content: '';
+    position: absolute;
+    width: 6px;
+    height: 14px;
+    background-color: #6366f1;
+    border-radius: 3px;
+}
+
+.comparison-handle::before {
+    left: 8px;
+}
+
+.comparison-handle::after {
+    right: 8px;
+}
+
+/* Heatmap Visualizations */
+.heatmap-container {
+    position: relative;
+}
+
+.heatmap-title {
+    position: absolute;
+    top: 0;
+    left: 0;
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.heatmap-legend {
+    display: flex;
+    justify-content: center;
+    margin-top: 0.5rem;
+}
+
+.heatmap-legend-item {
+    display: flex;
+    align-items: center;
+    margin: 0 5px;
+    font-size: 10px;
+}
+
+.legend-color {
+    width: 12px;
+    height: 12px;
+    margin-right: 4px;
+    border-radius: 2px;
+}
+
+/* Histogram Tabs */
+.histogram-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 1rem;
+}
+
+.histogram-tab {
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 4px 4px 0 0;
+    font-size: 14px;
+}
+
+.histogram-tab.active {
+    border-color: var(--border-color);
+    background-color: white;
+    border-bottom-color: white;
+    margin-bottom: -1px;
+}
