@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Image Comparison - Steganography</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/steganography.css') }}">
+    <style>
+        .comparison-slider {
+            position: relative;
+            width: 100%;
+            max-width: 900px;
+            margin: 0 auto;
+            overflow: hidden;
+        }
+        .comparison-slider img {
+            display: block;
+            width: 100%;
+            max-width: 100%;
+        }
+        .original-image {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+        .slider-handle {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            width: 4px;
+            background-color: white;
+            cursor: ew-resize;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+            z-index: 3;
+        }
+        .slider-handle::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background-color: white;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+        }
+        .slider-handle::before {
+            content: '↔';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #333;
+            font-weight: bold;
+            z-index: 4;
+        }
+        .image-label {
+            position: absolute;
+            top: 20px;
+            padding: 5px 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            font-weight: bold;
+            border-radius: 4px;
+        }
+        .original-label {
+            left: 20px;
+        }
+        .stego-label {
+            right: 20px;
+        }
+        .comparison-info {
+            margin-top: 1rem;
+            text-align: center;
+            font-weight: bold;
+        }
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .loading-spinner {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+    </div>
+
+    <div class="container mx-auto px-4 py-10 max-w-6xl">
+        <nav class="mb-6">
+            <ol class="flex text-sm text-gray-600">
+                <li><a href="{{ url_for('index') }}" class="text-blue-600 hover:text-blue-800">Home</a></li>
+                <li class="mx-2">/</li>
+                <li><a href="{{ url_for('analyze') }}" class="text-blue-600 hover:text-blue-800">Image Analysis</a></li>
+                <li class="mx-2">/</li>
+                <li class="text-gray-800">Interactive Comparison</li>
+            </ol>
+        </nav>
+
+        <h1 class="text-3xl font-bold text-gray-800 mb-6">Interactive Image Comparison</h1>
+        
+        <div class="bg-white rounded-lg shadow-md p-6 mb-10">
+            <div class="text-center mb-4">
+                <p class="text-gray-700">Drag the slider left and right to compare the original and stego images.</p>
+            </div>
+            
+            <div class="comparison-slider" id="comparisonSlider">
+                <img src="{{ url_for('temp_file', filename=stego_img) }}" alt="Stego Image" class="stego-image">
+                <div class="original-image" id="originalImage">
+                    <img src="{{ url_for('temp_file', filename=original_img) }}" alt="Original Image">
+                </div>
+                <div class="slider-handle" id="sliderHandle"></div>
+                <div class="image-label original-label">Original</div>
+                <div class="image-label stego-label">Stego</div>
+            </div>
+            
+            <div class="comparison-info mt-6 text-center">
+                <p class="text-gray-700">Original: {{ original_filename }} | Stego: {{ stego_filename }}</p>
+                <p class="text-gray-700">Dimensions: {{ dimensions }}</p>
+                <p class="text-gray-700">PSNR: {{ "%.2f"|format(psnr) }} dB | SSIM: {{ "%.4f"|format(ssim) }}</p>
+            </div>
+            
+            <div class="mt-8 flex justify-center space-x-4">
+                <a href="{{ url_for('analyze_result') }}" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-md transition duration-300">
+                    Back to Analysis Results
+                </a>
+                <a href="{{ url_for('analyze') }}" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-6 rounded-md transition duration-300">
+                    Analyze Another Image
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <footer class="bg-gray-100 py-4 mt-10">
+        <div class="container mx-auto text-center">
+            <p class="text-gray-600 text-sm">Transform Domain Steganography Tool</p>
+        </div>
+    </footer>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const slider = document.getElementById('comparisonSlider');
+            const originalImage = document.getElementById('originalImage');
+            const sliderHandle = document.getElementById('sliderHandle');
+            let isDragging = false;
+            
+            // Hide loading overlay when all images are loaded
+            const images = document.querySelectorAll('.comparison-slider img');
+            let imagesLoaded = 0;
+            
+            function imageLoaded() {
+                imagesLoaded++;
+                if (imagesLoaded === images.length) {
+                    document.getElementById('loadingOverlay').style.display = 'none';
+                }
+            }
+            
+            images.forEach(img => {
+                if (img.complete) {
+                    imageLoaded();
+                } else {
+                    img.addEventListener('load', imageLoaded);
+                    img.addEventListener('error', imageLoaded); // In case of error, still count as loaded
+                }
+            });
+            
+            // Set initial slider position
+            function updateSliderPosition(x) {
+                const rect = slider.getBoundingClientRect();
+                let position = (x - rect.left) / rect.width;
+                position = Math.max(0, Math.min(1, position));
+                
+                originalImage.style.width = position * 100 + '%';
+                sliderHandle.style.left = position * 100 + '%';
+            }
+            
+            // Mouse events
+            sliderHandle.addEventListener('mousedown', function(e) {
+                isDragging = true;
+                e.preventDefault(); // Prevent text selection
+            });
+            
+            document.addEventListener('mouseup', function() {
+                isDragging = false;
+            });
+            
+            document.addEventListener('mousemove', function(e) {
+                if (isDragging) {
+                    updateSliderPosition(e.clientX);
+                }
+            });
+            
+            // Touch events for mobile
+            sliderHandle.addEventListener('touchstart', function(e) {
+                isDragging = true;
+            });
+            
+            document.addEventListener('touchend', function() {
+                isDragging = false;
+            });
+            
+            document.addEventListener('touchmove', function(e) {
+                if (isDragging && e.touches.length > 0) {
+                    updateSliderPosition(e.touches[0].clientX);
+                    e.preventDefault(); // Prevent scrolling while dragging
+                }
+            });
+            
+            // Handle slider clicks (not just dragging)
+            slider.addEventListener('click', function(e) {
+                updateSliderPosition(e.clientX);
+            });
+            
+            // Set initial position
+            setTimeout(() => {
+                updateSliderPosition(slider.getBoundingClientRect().left + slider.offsetWidth / 2);
+            }, 100);
+        });
+    </script>
+</body>
+</html>

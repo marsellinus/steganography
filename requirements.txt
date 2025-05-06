@@ -1,6 +1,6 @@
 numpy>=1.19.0
 opencv-python>=4.5.0
-Pillow>=8.0.0
+Pillow>=9.0.0
 pywavelets>=1.1.1
 Flask==2.3.3
 Werkzeug==2.3.7
@@ -14,3 +14,4 @@ soundfile>=0.10.3     # For audio file I/O
 librosa>=0.8.1        # For audio processing
 sounddevice>=0.4.1    # For audio playback
 PySimpleGUI>=4.60.4   # For modern GUI interface
+reportlab==3.6.12

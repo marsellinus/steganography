@@ -3,660 +3,226 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Analysis Results - Steganography</title>
+    <title>Image Analysis Results - Steganography</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Chart.js untuk visualisasi data -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/steganography.css') }}">
+    <!-- Alpine.js for interactivity -->
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <!-- AOS Animation -->
     <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
     <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
-    <style>
-        .metrics-card {
-            transition: all 0.3s ease;
-        }
-        .metrics-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-        }
-        .chart-container {
-            position: relative;
-            height: 300px;
-            width: 100%;
-        }
-        .gradient-text {
-            background: linear-gradient(to right, #8b5cf6, #6366f1);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-        }
-        .slider-container {
-            position: relative;
-            overflow: hidden;
-        }
-        .slider-container img {
-            display: block;
-            width: 100%;
-        }
-        .image-comparison-slider {
-            position: absolute;
-            top: 0;
-            bottom: 0;
-            left: 0;
-            width: 50%;
-            border-right: 2px solid white;
-            overflow: hidden;
-        }
-        .slider-handle {
-            position: absolute;
-            top: 50%;
-            right: -12px;
-            transform: translateY(-50%);
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            background-color: white;
-            cursor: ew-resize;
-            box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
-        }
-        .slider-handle::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background-color: #3b82f6;
-        }
-    </style>
 </head>
-<body class="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
-    <div class="container mx-auto px-4 py-12 max-w-7xl">
+<body class="bg-gray-50">
+    <div class="container mx-auto px-4 py-10 max-w-6xl">
         <nav class="mb-6">
             <ol class="flex text-sm text-gray-600">
-                <li><a href="{{ url_for('index') }}" class="text-purple-600 hover:text-purple-800">Home</a></li>
+                <li><a href="{{ url_for('index') }}" class="text-blue-600 hover:text-blue-800">Home</a></li>
                 <li class="mx-2">/</li>
-                <li><a href="{{ url_for('analyze') }}" class="text-purple-600 hover:text-purple-800">Analyze Images</a></li>
+                <li><a href="{{ url_for('analyze') }}" class="text-blue-600 hover:text-blue-800">Image Analysis</a></li>
                 <li class="mx-2">/</li>
-                <li class="text-gray-800">Analysis Results</li>
+                <li class="text-gray-800">Results</li>
             </ol>
         </nav>
 
-        <h1 data-aos="fade-down" class="text-3xl font-bold gradient-text mb-6">Image Steganography Analysis</h1>
+        <h1 class="text-3xl font-bold text-gray-800 mb-6">Image Analysis Results</h1>
         
-        <!-- Main Results Grid -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-            <!-- Image Comparison Card -->
-            <div data-aos="fade-up" data-aos-delay="100" class="lg:col-span-2 bg-white rounded-lg shadow-md overflow-hidden">
-                <div class="bg-purple-700 text-white px-6 py-3 border-b border-purple-600">
-                    <h2 class="text-lg font-medium flex items-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd" />
-                        </svg>
-                        Image Comparison
-                    </h2>
-                </div>
-                <div class="p-6">
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                        <div class="text-center">
-                            <h3 class="text-sm font-medium text-gray-700 mb-2">Original Image</h3>
-                            <img src="{{ url_for('uploaded_file', filename=original_filename) }}" alt="Original Image" class="mx-auto max-h-40 border rounded shadow-sm">
-                            <p class="text-xs text-gray-500 mt-1">Cover Image</p>
-                        </div>
-                        <div class="text-center">
-                            <h3 class="text-sm font-medium text-gray-700 mb-2">Stego Image</h3>
-                            <img src="{{ url_for('uploaded_file', filename=stego_filename) }}" alt="Stego Image" class="mx-auto max-h-40 border rounded shadow-sm">
-                            <p class="text-xs text-gray-500 mt-1">With Hidden Message</p>
-                        </div>
-                        <div class="text-center">
-                            <h3 class="text-sm font-medium text-gray-700 mb-2">Difference (10x)</h3>
-                            <img src="{{ url_for('temp_file', filename=diff_filename) }}" alt="Difference Image" class="mx-auto max-h-40 border rounded shadow-sm">
-                            <p class="text-xs text-gray-500 mt-1">Amplified 10x for visibility</p>
-                        </div>
-                    </div>
-                    
-                    <div class="mt-6">
-                        <h3 class="text-sm font-medium text-gray-700 mb-3">Interactive Comparison</h3>
-                        <div class="slider-container border rounded-md overflow-hidden">
-                            <img src="{{ url_for('uploaded_file', filename=stego_filename) }}" alt="Stego Image">
-                            <div class="image-comparison-slider">
-                                <img src="{{ url_for('uploaded_file', filename=original_filename) }}" alt="Original Image" style="width: 200%; max-width: none;">
-                                <div class="slider-handle"></div>
-                            </div>
-                        </div>
-                        <p class="text-xs text-gray-500 mt-2 text-center">Drag the slider to compare original (left) vs stego (right) images</p>
-                    </div>
-                </div>
+        <!-- Image Information Section -->
+        <div data-aos="fade-up" data-aos-duration="800" class="bg-white rounded-lg shadow-md mb-8 overflow-hidden">
+            <div class="border-b px-6 py-4 bg-gradient-to-r from-gray-50 to-gray-100">
+                <h2 class="text-xl font-semibold text-gray-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Image Information
+                </h2>
             </div>
-            
-            <!-- Quality Metrics Card -->
-            <div data-aos="fade-up" data-aos-delay="200" class="bg-white rounded-lg shadow-md overflow-hidden">
-                <div class="bg-purple-700 text-white px-6 py-3 border-b border-purple-600">
-                    <h2 class="text-lg font-medium flex items-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
-                        </svg>
-                        Quality Metrics
-                    </h2>
-                </div>
-                <div class="p-6">
-                    <!-- PSNR Card -->
-                    <div class="metrics-card bg-gradient-to-br from-purple-50 to-indigo-50 p-4 rounded-lg border border-purple-100 mb-4">
-                        <div class="flex items-center justify-between">
-                            <h3 class="text-sm font-medium text-purple-800">PSNR (Peak Signal-to-Noise Ratio)</h3>
-                            <span class="text-lg font-bold text-purple-700">{{ psnr }} dB</span>
-                        </div>
-                        <div class="mt-2">
-                            <div class="w-full bg-gray-200 rounded-full h-2.5">
-                                {% if psnr != 'Not calculated' %}
-                                    {% set quality = psnr|float %}
-                                    {% if quality > 40 %}
-                                        {% set percent = 100 %}
-                                        {% set color = "bg-green-600" %}
-                                    {% elif quality > 35 %}
-                                        {% set percent = 90 %}
-                                        {% set color = "bg-green-500" %}
-                                    {% elif quality > 30 %}
-                                        {% set percent = 75 %}
-                                        {% set color = "bg-green-400" %}
-                                    {% elif quality > 25 %}
-                                        {% set percent = 60 %}
-                                        {% set color = "bg-yellow-400" %}
-                                    {% elif quality > 20 %}
-                                        {% set percent = 40 %}
-                                        {% set color = "bg-yellow-500" %}
-                                    {% else %}
-                                        {% set percent = 20 %}
-                                        {% set color = "bg-red-500" %}
-                                    {% endif %}
-                                    <div class="{{ color }} h-2.5 rounded-full" style="width: {{ percent }}%"></div>
-                                {% else %}
-                                    <div class="bg-gray-400 h-2.5 rounded-full" style="width: 50%"></div>
-                                {% endif %}
-                            </div>
-                            <p class="text-xs text-purple-700 mt-1">
-                                {% if psnr != 'Not calculated' %}
-                                    {% set quality = psnr|float %}
-                                    {% if quality > 40 %}
-                                        Excellent - Differences imperceptible
-                                    {% elif quality > 30 %}
-                                        Good - Differences hardly noticeable
-                                    {% elif quality > 25 %}
-                                        Acceptable - Some visible differences
-                                    {% else %}
-                                        Poor - Visible differences
-                                    {% endif %}
-                                {% else %}
-                                    Unable to calculate
-                                {% endif %}
-                            </p>
+            <div class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-800 mb-2">Original Image</h3>
+                        <div class="space-y-1">
+                            <p class="text-gray-700"><span class="font-medium">Dimensions:</span> {{ dimensions[0] }} × {{ dimensions[1] }} px</p>
+                            <p class="text-gray-700"><span class="font-medium">Color Mode:</span> {{ color_mode }}</p>
+                            <p class="text-gray-700"><span class="font-medium">Unique Colors:</span> {{ unique_colors_orig }}</p>
                         </div>
                     </div>
-                    
-                    <!-- MSE Card -->
-                    <div class="metrics-card bg-gradient-to-br from-blue-50 to-cyan-50 p-4 rounded-lg border border-blue-100 mb-4">
-                        <div class="flex items-center justify-between">
-                            <h3 class="text-sm font-medium text-blue-800">MSE (Mean Squared Error)</h3>
-                            <span class="text-lg font-bold text-blue-700">{{ mse }}</span>
-                        </div>
-                        <p class="text-xs text-blue-700 mt-1">Lower values indicate less distortion</p>
-                    </div>
-                    
-                    <!-- Correlation Card -->
-                    <div class="metrics-card bg-gradient-to-br from-emerald-50 to-teal-50 p-4 rounded-lg border border-emerald-100">
-                        <div class="flex items-center justify-between">
-                            <h3 class="text-sm font-medium text-emerald-800">Histogram Correlation</h3>
-                            <span class="text-lg font-bold text-emerald-700">{{ correlation }}</span>
-                        </div>
-                        <div class="mt-2">
-                            <div class="w-full bg-gray-200 rounded-full h-2.5">
-                                {% if correlation != 'Not available (scipy required)' %}
-                                    {% set corr = correlation|float %}
-                                    {% set corr_percent = corr * 100 %}
-                                    {% if corr > 0.99 %}
-                                        {% set color = "bg-green-600" %}
-                                    {% elif corr > 0.95 %}
-                                        {% set color = "bg-green-500" %}
-                                    {% elif corr > 0.9 %}
-                                        {% set color = "bg-yellow-500" %}
-                                    {% else %}
-                                        {% set color = "bg-red-500" %}
-                                    {% endif %}
-                                    <div class="{{ color }} h-2.5 rounded-full" style="width: {{ corr_percent }}%"></div>
-                                {% else %}
-                                    <div class="bg-gray-400 h-2.5 rounded-full" style="width: 50%"></div>
-                                {% endif %}
-                            </div>
-                            <p class="text-xs text-emerald-700 mt-1">
-                                {% if correlation != 'Not available (scipy required)' %}
-                                    {% set corr = correlation|float %}
-                                    {% if corr > 0.99 %}
-                                        Excellent - Histograms nearly identical
-                                    {% elif corr > 0.95 %}
-                                        Good - Minimal statistical changes
-                                    {% elif corr > 0.9 %}
-                                        Fair - Some statistical changes
-                                    {% else %}
-                                        Poor - Significant statistical changes
-                                    {% endif %}
-                                {% else %}
-                                    Unable to calculate
-                                {% endif %}
-                            </p>
-                        </div>
-                    </div>
-                    
-                    <!-- Overall Assessment -->
-                    <div class="mt-6">
-                        <h3 class="text-sm font-medium text-gray-700 mb-2">Overall Assessment</h3>
-                        <div class="bg-gray-100 border-l-4 
-                            {% if psnr != 'Not calculated' %}
-                                {% set quality = psnr|float %}
-                                {% if quality > 35 %}
-                                    border-green-500 text-green-700
-                                {% elif quality > 25 %}
-                                    border-yellow-500 text-yellow-700
-                                {% else %}
-                                    border-red-500 text-red-700
-                                {% endif %}
-                            {% else %}
-                                border-gray-500 text-gray-700
-                            {% endif %}
-                         p-4 rounded-r">
-                            {% if psnr != 'Not calculated' %}
-                                {% set quality = psnr|float %}
-                                {% if quality > 35 %}
-                                    <p class="font-medium">High Quality Steganography</p>
-                                    <p class="text-sm">The hidden message is well concealed with minimal image distortion.</p>
-                                {% elif quality > 25 %}
-                                    <p class="font-medium">Acceptable Steganography</p>
-                                    <p class="text-sm">The hidden message is reasonably concealed but some analysis might detect it.</p>
-                                {% else %}
-                                    <p class="font-medium">Low Quality Steganography</p>
-                                    <p class="text-sm">The hidden message has caused noticeable changes to the image.</p>
-                                {% endif %}
-                            {% else %}
-                                <p class="font-medium">Unable to assess quality</p>
-                                <p class="text-sm">Quality metrics could not be calculated accurately.</p>
-                            {% endif %}
+                    <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-800 mb-2">Stego Image</h3>
+                        <div class="space-y-1">
+                            <p class="text-gray-700"><span class="font-medium">Dimensions:</span> {{ dimensions[0] }} × {{ dimensions[1] }} px</p>
+                            <p class="text-gray-700"><span class="font-medium">Color Mode:</span> {{ color_mode }}</p>
+                            <p class="text-gray-700"><span class="font-medium">Unique Colors:</span> {{ unique_colors_stego }}</p>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
         
-        <!-- Histogram Analysis -->
-        <div data-aos="fade-up" data-aos-delay="300" class="bg-white rounded-lg shadow-md overflow-hidden mb-8">
-            <div class="bg-purple-700 text-white px-6 py-3 border-b border-purple-600">
-                <h2 class="text-lg font-medium flex items-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                        <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
+        <!-- Quality Metrics Section -->
+        <div data-aos="fade-up" data-aos-duration="800" class="bg-white rounded-lg shadow-md mb-8 overflow-hidden">
+            <div class="border-b px-6 py-4 bg-gradient-to-r from-gray-50 to-gray-100">
+                <h2 class="text-xl font-semibold text-gray-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    Quality Metrics
+                </h2>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4" data-aos="fade-up" data-aos-delay="100">
+                    <!-- PSNR Metric Card -->
+                    <div class="bg-gray-50 rounded-lg p-6 text-center border border-gray-200">
+                        <h3 class="text-sm uppercase tracking-wide text-gray-600 mb-1">Peak Signal-to-Noise Ratio</h3>
+                        <p class="text-3xl font-bold text-green-700">{{ psnr }} dB</p>
+                        <p class="mt-2 text-xs text-gray-600">Higher is better. PSNR > 30dB indicates good quality.</p>
+                    </div>
+                    
+                    <!-- SSIM Metric Card -->
+                    <div class="bg-gray-50 rounded-lg p-6 text-center border border-gray-200">
+                        <h3 class="text-sm uppercase tracking-wide text-gray-600 mb-1">Structural Similarity</h3>
+                        <p class="text-3xl font-bold text-green-700">{{ ssim }}</p>
+                        <p class="mt-2 text-xs text-gray-600">Closer to 1.0 is better. Measures structural similarity.</p>
+                    </div>
+                    
+                    <!-- MSE Metric Card -->
+                    <div class="bg-gray-50 rounded-lg p-6 text-center border border-gray-200">
+                        <h3 class="text-sm uppercase tracking-wide text-gray-600 mb-1">Mean Squared Error</h3>
+                        <p class="text-3xl font-bold text-green-700">{{ mse }}</p>
+                        <p class="mt-2 text-xs text-gray-600">Lower is better. Measure of signal distortion.</p>
+                    </div>
+                </div>
+                
+                <div class="mt-6 p-4 bg-{{ quality_color }}-50 rounded-lg border-l-4 border-{{ quality_color }}-500" data-aos="fade-up" data-aos-delay="200">
+                    <h3 class="font-medium text-{{ quality_color }}-800">Quality Assessment</h3>
+                    <p class="text-{{ quality_color }}-700">{{ quality_rating }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Visual Comparison Section -->
+        <div data-aos="fade-up" data-aos-duration="800" class="bg-white rounded-lg shadow-md mb-8 overflow-hidden">
+            <div class="border-b px-6 py-4 bg-gradient-to-r from-gray-50 to-gray-100">
+                <h2 class="text-xl font-semibold text-gray-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    Visual Comparison
+                </h2>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6" data-aos="fade-up" data-aos-delay="100">
+                    <div>
+                        <h3 class="text-center font-medium mb-2">Original Image</h3>
+                        <div class="border rounded-lg overflow-hidden">
+                            {% if original %}
+                            <img src="{{ url_for('temp_file', filename=original) }}" alt="Original Image" class="w-full">
+                            {% else %}
+                            <div class="bg-gray-100 p-4 text-center text-gray-500">Image not available</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div>
+                        <h3 class="text-center font-medium mb-2">Stego Image</h3>
+                        <div class="border rounded-lg overflow-hidden">
+                            {% if stego %}
+                            <img src="{{ url_for('temp_file', filename=stego) }}" alt="Stego Image" class="w-full">
+                            {% else %}
+                            <div class="bg-gray-100 p-4 text-center text-gray-500">Image not available</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-6" data-aos="fade-up" data-aos-delay="200">
+                    <h3 class="text-center font-medium mb-2">Difference (Enhanced)</h3>
+                    <div class="border rounded-lg overflow-hidden">
+                        {% if difference and difference != '' %}
+                        <img src="{{ url_for('temp_file', filename=difference) }}" alt="Enhanced Difference Image" class="w-full">
+                        {% else %}
+                        <div class="bg-gray-100 p-10 text-center text-gray-500">
+                            <p class="mb-2">Difference image not available</p>
+                            <p class="text-xs">The system was unable to generate a difference visualization</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <p class="mt-2 text-sm text-gray-600 text-center">Note: The difference has been amplified to make subtle changes visible. Brighter areas indicate greater differences.</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Histogram Analysis Section -->
+        <div data-aos="fade-up" data-aos-duration="800" class="bg-white rounded-lg shadow-md mb-8 overflow-hidden">
+            <div class="border-b px-6 py-4 bg-gradient-to-r from-gray-50 to-gray-100">
+                <h2 class="text-xl font-semibold text-gray-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
                     </svg>
                     Histogram Analysis
                 </h2>
             </div>
             <div class="p-6">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <!-- Red Channel -->
-                    <div>
-                        <h3 class="text-sm font-medium text-gray-700 mb-2 text-center">Red Channel</h3>
-                        <div class="chart-container">
-                            <canvas id="redHistogram"></canvas>
-                        </div>
-                    </div>
-                    
-                    <!-- Green Channel -->
-                    <div>
-                        <h3 class="text-sm font-medium text-gray-700 mb-2 text-center">Green Channel</h3>
-                        <div class="chart-container">
-                            <canvas id="greenHistogram"></canvas>
-                        </div>
-                    </div>
-                    
-                    <!-- Blue Channel -->
-                    <div>
-                        <h3 class="text-sm font-medium text-gray-700 mb-2 text-center">Blue Channel</h3>
-                        <div class="chart-container">
-                            <canvas id="blueHistogram"></canvas>
-                        </div>
-                    </div>
+                <div class="border rounded-lg overflow-hidden" data-aos="fade-up" data-aos-delay="100">
+                    {% if histogram_comparison %}
+                    <img src="{{ url_for('temp_file', filename=histogram_comparison) }}" alt="Histogram Comparison" class="w-full">
+                    {% else %}
+                    <div class="bg-gray-100 p-4 text-center text-gray-500">Histogram comparison not available</div>
+                    {% endif %}
                 </div>
                 
-                <div class="mt-6 bg-purple-50 p-4 rounded-lg border border-purple-100">
-                    <h4 class="text-sm font-medium text-purple-700 mb-2">Histogram Analysis Interpretation</h4>
-                    <p class="text-sm text-purple-700">
-                        Histograms represent the distribution of pixel values in each color channel. 
-                        Similar histograms between original and stego images indicate good steganography.
-                        Significant differences may reveal the presence of hidden data.
-                    </p>
+                <div class="mt-4 p-4 bg-orange-50 rounded-lg" data-aos="fade-up" data-aos-delay="200">
+                    <h4 class="font-medium text-orange-800 mb-1">About Histogram Analysis</h4>
+                    <p class="text-orange-700 text-sm">The histogram shows the distribution of pixel values across color channels. 
+                    Similar histograms between original and stego images indicate good steganography. 
+                    Major differences can reveal where data has been hidden.</p>
                 </div>
             </div>
         </div>
         
-        <!-- Technical Information -->
-        <div data-aos="fade-up" data-aos-delay="400" class="bg-white rounded-lg shadow-md overflow-hidden mb-8">
-            <div class="bg-purple-700 text-white px-6 py-3 border-b border-purple-600">
-                <h2 class="text-lg font-medium flex items-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+        <!-- Interactive Comparison Section -->
+        <div data-aos="fade-up" data-aos-duration="800" class="bg-white rounded-lg shadow-md mb-8 overflow-hidden">
+            <div class="border-b px-6 py-4 bg-gradient-to-r from-gray-50 to-gray-100">
+                <h2 class="text-xl font-semibold text-gray-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                     </svg>
-                    Technical Information
+                    Interactive Comparison
                 </h2>
             </div>
-            <div class="p-6">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <!-- Original Image Info -->
-                    <div class="bg-gray-50 p-4 rounded-lg">
-                        <h3 class="text-sm font-medium text-gray-700 mb-2">Original Image</h3>
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <tbody class="divide-y divide-gray-200">
-                                <tr>
-                                    <td class="text-xs text-gray-500 py-2">Filename</td>
-                                    <td class="text-xs text-gray-700 py-2 font-medium">{{ original_filename }}</td>
-                                </tr>
-                                <tr id="original-dimensions">
-                                    <td class="text-xs text-gray-500 py-2">Dimensions</td>
-                                    <td class="text-xs text-gray-700 py-2 font-medium">Loading...</td>
-                                </tr>
-                                <tr id="original-filesize">
-                                    <td class="text-xs text-gray-500 py-2">File Size</td>
-                                    <td class="text-xs text-gray-700 py-2 font-medium">Loading...</td>
-                                </tr>
-                                <tr id="original-colors">
-                                    <td class="text-xs text-gray-500 py-2">Unique Colors</td>
-                                    <td class="text-xs text-gray-700 py-2 font-medium">Loading...</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                    
-                    <!-- Stego Image Info -->
-                    <div class="bg-gray-50 p-4 rounded-lg">
-                        <h3 class="text-sm font-medium text-gray-700 mb-2">Stego Image</h3>
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <tbody class="divide-y divide-gray-200">
-                                <tr>
-                                    <td class="text-xs text-gray-500 py-2">Filename</td>
-                                    <td class="text-xs text-gray-700 py-2 font-medium">{{ stego_filename }}</td>
-                                </tr>
-                                <tr id="stego-dimensions">
-                                    <td class="text-xs text-gray-500 py-2">Dimensions</td>
-                                    <td class="text-xs text-gray-700 py-2 font-medium">Loading...</td>
-                                </tr>
-                                <tr id="stego-filesize">
-                                    <td class="text-xs text-gray-500 py-2">File Size</td>
-                                    <td class="text-xs text-gray-700 py-2 font-medium">Loading...</td>
-                                </tr>
-                                <tr id="stego-colors">
-                                    <td class="text-xs text-gray-500 py-2">Unique Colors</td>
-                                    <td class="text-xs text-gray-700 py-2 font-medium">Loading...</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+            <div class="p-6 text-center">
+                <p class="text-gray-700 mb-6">Compare original and stego images side-by-side with an interactive slider.</p>
+                <a href="{{ url_for('interactive_compare') }}" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-6 rounded-md transition duration-300 inline-block">
+                    Open Interactive Comparison
+                </a>
             </div>
         </div>
-        
-        <div class="text-center mt-8">
-            <a href="{{ url_for('analyze') }}" class="bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-6 rounded-md transition duration-300 inline-block transform hover:scale-105">
-                <span class="flex items-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 0 002-2M9 5a2 2 0 012-2h2a2 0 012 2" />
-                    </svg>
-                    Analyze Another Image
-                </span>
+
+        <div class="flex justify-center space-x-4 mt-10" data-aos="fade-up" data-aos-delay="300">
+            <a href="{{ url_for('analyze') }}" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-6 rounded-md transition duration-300">
+                Analyze Another Image
             </a>
-            <a href="{{ url_for('index') }}" class="ml-3 bg-white hover:bg-gray-100 text-gray-800 font-medium py-2 px-6 border border-gray-300 rounded-md transition duration-300 inline-block transform hover:scale-105">
-                <span class="flex items-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                    </svg>
-                    Back to Home
-                </span>
+            {% if pdf_report_filename %}
+            <a href="{{ url_for('temp_file', filename=pdf_report_filename) }}" target="_blank" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-md transition duration-300">
+                Download PDF Report
+            </a>
+            {% endif %}
+            <a href="{{ url_for('index') }}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-6 rounded-md transition duration-300">
+                Back to Home
             </a>
         </div>
     </div>
     
-    <footer class="bg-gradient-to-r from-gray-100 to-gray-200 py-6 mt-10">
+    <footer class="bg-gray-100 py-4 mt-10">
         <div class="container mx-auto text-center">
-            <p class="text-gray-600 font-medium">Transform Domain Steganography Tool</p>
-            <p class="text-gray-500 text-xs mt-1">Created for Image Processing and Generative AI Techniques</p>
+            <p class="text-gray-600 text-sm">Transform Domain Steganography Tool</p>
         </div>
     </footer>
     
     <script>
-        // Initialize AOS animation library
         document.addEventListener('DOMContentLoaded', function() {
             AOS.init();
-            
-            // Setup comparison slider
-            setupComparisonSlider();
-            
-            // Load and display histograms
-            loadHistogramData('{{ original_filename }}', '{{ stego_filename }}');
-            
-            // Load image metadata
-            loadImageMetadata('{{ original_filename }}', 'original');
-            loadImageMetadata('{{ stego_filename }}', 'stego');
         });
-        
-        // Setup image comparison slider
-        function setupComparisonSlider() {
-            const sliderContainer = document.querySelector('.slider-container');
-            if (!sliderContainer) return;
-            
-            const slider = document.querySelector('.image-comparison-slider');
-            const sliderHandle = document.querySelector('.slider-handle');
-            let isDragging = false;
-            
-            sliderHandle.addEventListener('mousedown', startDragging);
-            sliderHandle.addEventListener('touchstart', startDragging);
-            
-            function startDragging(e) {
-                e.preventDefault();
-                isDragging = true;
-                
-                document.addEventListener('mousemove', moveSlider);
-                document.addEventListener('touchmove', moveSlider, { passive: false });
-                document.addEventListener('mouseup', stopDragging);
-                document.addEventListener('touchend', stopDragging);
-            }
-            
-            function moveSlider(e) {
-                if (!isDragging) return;
-                
-                let clientX;
-                if (e.type === 'touchmove') {
-                    e.preventDefault();
-                    clientX = e.touches[0].clientX;
-                } else {
-                    clientX = e.clientX;
-                }
-                
-                const sliderRect = sliderContainer.getBoundingClientRect();
-                const position = (clientX - sliderRect.left) / sliderRect.width;
-                const limitedPosition = Math.max(0, Math.min(1, position));
-                
-                slider.style.width = `${limitedPosition * 100}%`;
-            }
-            
-            function stopDragging() {
-                isDragging = false;
-                document.removeEventListener('mousemove', moveSlider);
-                document.removeEventListener('touchmove', moveSlider);
-                document.removeEventListener('mouseup', stopDragging);
-                document.removeEventListener('touchend', stopDragging);
-            }
-        }
-        
-        // Load histogram data from the server
-        function loadHistogramData(originalFilename, stegoFilename) {
-            // Load original histogram
-            fetch(`/generate_histogram/${originalFilename}`)
-                .then(response => response.json())
-                .then(originalData => {
-                    // Load stego histogram
-                    fetch(`/generate_histogram/${stegoFilename}`)
-                        .then(response => response.json())
-                        .then(stegoData => {
-                            // Create histogram charts
-                            createHistogramChart('redHistogram', originalData.r, stegoData.r, 'red');
-                            createHistogramChart('greenHistogram', originalData.g, stegoData.g, 'green');
-                            createHistogramChart('blueHistogram', originalData.b, stegoData.b, 'blue');
-                        })
-                        .catch(error => console.error('Error loading stego histogram data:', error));
-                })
-                .catch(error => console.error('Error loading original histogram data:', error));
-        }
-        
-        // Create histogram chart
-        function createHistogramChart(canvasId, originalData, stegoData, color) {
-            const ctx = document.getElementById(canvasId).getContext('2d');
-            
-            // Prepare datasets
-            const labels = Array.from({length: 256}, (_, i) => i);
-            
-            // Every 8th value for cleaner display
-            const displayedLabels = labels.filter(label => label % 8 === 0);
-            const displayedOriginalData = originalData.filter((_, i) => i % 8 === 0);
-            const displayedStegoData = stegoData.filter((_, i) => i % 8 === 0);
-            
-            // Color mapping
-            const colorMap = {
-                'red': ['rgba(255, 99, 132, 0.5)', 'rgba(255, 99, 132, 0.8)'],
-                'green': ['rgba(75, 192, 192, 0.5)', 'rgba(75, 192, 192, 0.8)'],
-                'blue': ['rgba(54, 162, 235, 0.5)', 'rgba(54, 162, 235, 0.8)']
-            };
-            
-            new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: displayedLabels,
-                    datasets: [
-                        {
-                            label: 'Original',
-                            data: displayedOriginalData,
-                            borderColor: colorMap[color][1],
-                            backgroundColor: colorMap[color][0],
-                            borderWidth: 1,
-                            pointRadius: 0
-                        },
-                        {
-                            label: 'Stego',
-                            data: displayedStegoData,
-                            borderColor: 'rgba(128, 90, 213, 0.8)',
-                            backgroundColor: 'rgba(128, 90, 213, 0.5)',
-                            borderWidth: 1,
-                            borderDash: [5, 5],
-                            pointRadius: 0
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: {
-                        intersect: false,
-                        mode: 'index'
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            title: {
-                                display: true,
-                                text: 'Frequency'
-                            }
-                        },
-                        x: {
-                            title: {
-                                display: true,
-                                text: 'Pixel Value'
-                            },
-                            ticks: {
-                                maxRotation: 0
-                            }
-                        }
-                    },
-                    plugins: {
-                        legend: {
-                            position: 'top'
-                        },
-                        tooltip: {
-                            mode: 'index'
-                        }
-                    }
-                }
-            });
-        }
-        
-        // Load image metadata
-        function loadImageMetadata(filename, type) {
-            // Create a temporary image to get dimensions
-            const img = new Image();
-            img.onload = function() {
-                // Update dimensions
-                document.getElementById(`${type}-dimensions`).querySelector('td:last-child').textContent = 
-                    `${this.width} × ${this.height} px`;
-                
-                // Get file size
-                fetch(`/uploads/${filename}`)
-                    .then(response => {
-                        const fileSize = response.headers.get('content-length');
-                        if (fileSize) {
-                            const size = formatFileSize(parseInt(fileSize));
-                            document.getElementById(`${type}-filesize`).querySelector('td:last-child').textContent = size;
-                        } else {
-                            document.getElementById(`${type}-filesize`).querySelector('td:last-child').textContent = 'Unknown';
-                        }
-                    })
-                    .catch(error => {
-                        document.getElementById(`${type}-filesize`).querySelector('td:last-child').textContent = 'Error';
-                        console.error('Error getting file size:', error);
-                    });
-                
-                // Estimate unique colors (simplified)
-                document.getElementById(`${type}-colors`).querySelector('td:last-child').textContent = 
-                    'Calculating...';
-                    
-                // We'll use histogram data as a proxy for unique colors estimate
-                fetch(`/generate_histogram/${filename}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        // Count non-zero histogram bins for each channel as a rough estimate
-                        const countR = data.r.filter(val => val > 0).length;
-                        const countG = data.g.filter(val => val > 0).length;
-                        const countB = data.b.filter(val => val > 0).length;
-                        
-                        // Update UI
-                        document.getElementById(`${type}-colors`).querySelector('td:last-child').textContent = 
-                            `R: ${countR}, G: ${countG}, B: ${countB}`;
-                    })
-                    .catch(error => {
-                        document.getElementById(`${type}-colors`).querySelector('td:last-child').textContent = 'Error';
-                        console.error('Error estimating unique colors:', error);
-                    });
-            };
-            
-            img.onerror = function() {
-                document.getElementById(`${type}-dimensions`).querySelector('td:last-child').textContent = 'Error loading image';
-            };
-            
-            img.src = `/uploads/${filename}`;
-        }
-        
-        // Format file size in human-readable format
-        function formatFileSize(bytes) {
-            if (bytes === 0) return '0 Bytes';
-            
-            const k = 1024;
-            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-        }
     </script>
 </body>
 </html>

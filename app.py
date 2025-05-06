@@ -1,6 +1,6 @@
 import os
 import secrets
-from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory, jsonify, session
 from werkzeug.utils import secure_filename
 import cv2
 import numpy as np
@@ -24,6 +24,7 @@ from audio_wavelet_stego import AudioWaveletSteganography
 from unicode_handler import text_to_binary_unicode, binary_to_text_unicode, sanitize_text
 from binary_decoder import binary_to_text
 from audio_analyzer import AudioAnalyzer
+from image_analyzer import ImageAnalyzer  # Add this import
 
 # Make sure 'templates' folder exists and is properly detected
 template_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates')
@@ -37,6 +38,19 @@ app.config['OUTPUT_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__fil
 app.config['TEMP_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'temp')
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'bmp'}
 app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # 32MB max upload size (ditingkatkan dari 16MB)
+
+# Update the app configuration
+app.secret_key = os.environ.get('SECRET_KEY', 'dev_key_change_this_in_production')
+
+# Configure session to use filesystem instead of signed cookies
+app.config['SESSION_TYPE'] = 'filesystem'
+app.config['SESSION_PERMANENT'] = False
+app.config['SESSION_USE_SIGNER'] = True
+
+# Initialize extensions
+if 'SESSION_TYPE' in app.config:
+    from flask_session import Session
+    Session(app)
 
 # Create necessary folders if they don't exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -198,71 +212,134 @@ def decode():
 @app.route('/analyze', methods=['GET', 'POST'])
 def analyze():
     if request.method == 'POST':
-        # Check if original image was uploaded
-        if 'original_image' not in request.files:
-            flash('Original image not selected')
-            return redirect(request.url)
-            
-        # Check if stego image was uploaded
-        if 'stego_image' not in request.files:
-            flash('Stego image not selected')
+        # Check if files are uploaded
+        if 'original_image' not in request.files or 'stego_image' not in request.files:
+            flash('Please select both original and stego images')
             return redirect(request.url)
         
         original_file = request.files['original_image']
         stego_file = request.files['stego_image']
         
+        # Check if filenames are empty
         if original_file.filename == '' or stego_file.filename == '':
-            flash('Both images must be selected')
-            return redirect(request.url)
-            
-        if not (allowed_file(original_file.filename) and allowed_file(stego_file.filename)):
-            flash('Invalid file type. Please use PNG, JPG, JPEG, or BMP images.')
+            flash('Please select both original and stego images')
             return redirect(request.url)
         
-        try:
-            # Save the uploaded files
-            original_filename = secure_filename(original_file.filename)
-            stego_filename = secure_filename(stego_file.filename)
-            
-            original_path = os.path.join(app.config['UPLOAD_FOLDER'], original_filename)
-            stego_path = os.path.join(app.config['UPLOAD_FOLDER'], stego_filename)
+        # Process the uploaded files
+        if original_file and stego_file:
+            # Save uploaded files to temp directory
+            original_path = os.path.join(app.config['TEMP_FOLDER'], secure_filename(original_file.filename))
+            stego_path = os.path.join(app.config['TEMP_FOLDER'], secure_filename(stego_file.filename))
             
             original_file.save(original_path)
             stego_file.save(stego_path)
             
-            # Generate difference image
-            diff_filename = f"diff_{os.path.splitext(original_filename)[0]}.png"
-            diff_path = os.path.join(app.config['TEMP_FOLDER'], diff_filename)
-            
-            # Create and save difference image
-            create_difference_image(original_path, stego_path, diff_path)
-            
-            # Calculate image quality metrics
-            psnr, mse = calculate_image_quality(original_path, stego_path)
-            
-            # Calculate histogram correlation
             try:
-                from scipy.stats import pearsonr
-                correlation = calculate_histogram_correlation(original_path, stego_path)
-            except:
-                correlation = "Not available (scipy required)"
+                # Analyze images
+                analyzer = ImageAnalyzer(temp_dir=app.config['TEMP_FOLDER'])
                 
-            # Render analysis results
-            return render_template(
-                'analyze_result.html',
-                original_filename=original_filename,
-                stego_filename=stego_filename,
-                diff_filename=diff_filename,
-                psnr=psnr,
-                mse=mse,
-                correlation=correlation
-            )
-            
-        except Exception as e:
-            flash(f"Analysis error: {str(e)}")
-            return redirect(request.url)
-    
+                # Generate difference image directly to ensure it's created
+                diff_path = analyzer.generate_difference_image(
+                    original_path,
+                    stego_path,
+                    amplification=50,
+                    filename=f"diff_{secure_filename(original_file.filename)}"
+                )
+                
+                # Now run the full analysis
+                result = analyzer.analyze_image_pair(original_path, stego_path)
+                
+                if "error" in result:
+                    flash(f"Analysis error: {result['error']}")
+                    return redirect(url_for('analyze'))
+                
+                # Process results
+                metrics = result.get("metrics", {})
+                visualizations = result.get("visualizations", {})
+                
+                # Add difference image if it wasn't in the visualizations
+                if 'difference' not in visualizations and diff_path:
+                    visualizations['difference'] = diff_path
+                
+                # Ensure all paths are basename only for session storage
+                visualizations = {k: os.path.basename(v) for k, v in visualizations.items()}
+                
+                # Store in session
+                session['metrics'] = metrics
+                session['visualizations'] = visualizations
+                session['original_filename'] = os.path.basename(original_path)
+                session['stego_filename'] = os.path.basename(stego_path)
+                session['original_img'] = visualizations.get('original', '')
+                session['stego_img'] = visualizations.get('stego', '')
+                session['dimensions'] = f"{metrics['dimensions'][0]} × {metrics['dimensions'][1]} px" if 'dimensions' in metrics else 'Unknown'
+                session['psnr'] = float(metrics.get('psnr', 0))
+                session['ssim'] = float(metrics.get('ssim', 0))
+                
+                if "pdf_report_path" in result:
+                    session['pdf_report_path'] = os.path.basename(result["pdf_report_path"])
+                
+                return redirect(url_for('analyze_result'))
+                
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                flash(f"Error during analysis: {str(e)}")
+                return redirect(url_for('analyze'))
+
     return render_template('analyze.html')
+
+@app.route('/analyze_result')
+def analyze_result():
+    """Display the results of image analysis"""
+    # Get data from session
+    metrics = session.get('metrics', {})
+    visualizations = session.get('visualizations', {})
+    pdf_report_filename = session.get('pdf_report_path', '')
+    
+    # Debug info
+    print("Visualizations in session:", visualizations)
+    print("Difference image:", visualizations.get('difference', 'Not available'))
+    
+    # Return template with data
+    return render_template('analyze_result.html',
+                          psnr=metrics.get('psnr', 'Not calculated'),
+                          ssim=metrics.get('ssim', 'Not calculated'),
+                          mse=metrics.get('mse', 'Not calculated'),
+                          dimensions=metrics.get('dimensions', (0, 0)),
+                          color_mode=metrics.get('color_mode', 'Unknown'),
+                          quality_rating=metrics.get('quality_rating', 'Unknown'),
+                          quality_color=metrics.get('quality_color', 'gray'),
+                          unique_colors_orig=metrics.get('unique_colors_orig', 'Unknown'),
+                          unique_colors_stego=metrics.get('unique_colors_stego', 'Unknown'),
+                          original=visualizations.get('original', ''),
+                          stego=visualizations.get('stego', ''),
+                          difference=visualizations.get('difference', ''),
+                          histogram_comparison=visualizations.get('histogram_comparison', ''),
+                          pdf_report_filename=pdf_report_filename)
+
+@app.route('/interactive_compare')
+def interactive_compare():
+    """Interactive side-by-side comparison of original and stego images"""
+    original_img = session.get('original_img', '')
+    stego_img = session.get('stego_img', '')
+    original_filename = session.get('original_filename', 'Unknown')
+    stego_filename = session.get('stego_filename', 'Unknown')
+    dimensions = session.get('dimensions', 'Unknown')
+    psnr = session.get('psnr', 0)
+    ssim = session.get('ssim', 0)
+    
+    if not original_img or not stego_img:
+        flash("No comparison images found in session. Please analyze images first.")
+        return redirect(url_for('analyze'))
+    
+    return render_template('interactive_compare.html',
+                         original_img=original_img,
+                         stego_img=stego_img,
+                         original_filename=original_filename,
+                         stego_filename=stego_filename,
+                         dimensions=dimensions,
+                         psnr=psnr,
+                         ssim=ssim)
 
 @app.route('/audio/encode', methods=['GET', 'POST'])
 def audio_encode():
@@ -431,6 +508,7 @@ def audio_analyze():
             visualizations = result['visualizations']
             metrics = result['metrics']
             report_path = result['report_path']
+            pdf_report_path = result.get("pdf_report_path", "")
             
             # Get filenames only (not full paths)
             waveform_orig = os.path.basename(visualizations['waveform_orig'])
@@ -455,6 +533,7 @@ def audio_analyze():
             
             # Get report filename
             report_filename = os.path.basename(report_path)
+            pdf_report_filename = os.path.basename(pdf_report_path) if pdf_report_path else ""
             
             # Render the results
             return render_template('audio_analyze_result.html',
@@ -476,6 +555,7 @@ def audio_analyze():
                                   has_spectrum_analysis='spectrum' in analysis_types,
                                   has_histogram_analysis='histogram' in analysis_types,
                                   report_filename=report_filename,
+                                  pdf_report_filename=pdf_report_filename,
                                   report_path=report_path)
                                   
         except Exception as e:
@@ -526,7 +606,7 @@ def output_file(filename):
 
 @app.route('/temp/<filename>')
 def temp_file(filename):
-    """Serve files from the TEMP_FOLDER directory"""
+    """Serve temporary files"""
     return send_from_directory(app.config['TEMP_FOLDER'], filename)
 
 def calculate_image_quality(original_path, stego_path):

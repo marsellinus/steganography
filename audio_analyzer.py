@@ -19,6 +19,15 @@ import uuid
 import datetime
 from dataclasses import dataclass
 from scipy import stats
+from reportlab.lib.pagesizes import letter
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
+import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__))))
+from utils.pdf_generator import PDFReportGenerator
 
 # Thread lock for matplotlib operations
 plt_lock = threading.Lock()
@@ -555,6 +564,15 @@ class AudioAnalyzer:
                 f"{prefix}_report.html"
             )
             
+            # Generate PDF report
+            pdf_report_path = self.generate_pdf_report(
+                original_path,
+                stego_path,
+                metrics,
+                visualizations,
+                f"{prefix}_report.pdf"
+            )
+            
             # Return all results
             return {
                 "metrics": {
@@ -570,7 +588,8 @@ class AudioAnalyzer:
                     "quality_color": metrics.quality_rating[1]
                 },
                 "visualizations": visualizations,
-                "report_path": report_path
+                "report_path": report_path,
+                "pdf_report_path": pdf_report_path
             }
         except Exception as e:
             import traceback
@@ -838,12 +857,121 @@ class AudioAnalyzer:
         
         return output_path
 
-# Update the app.py to use this class instead of the individual functions
-def update_app_py():
-    # Import the new AudioAnalyzer class in app.py
-    # Replace individual functions with AudioAnalyzer methods
-    pass
-    
+    def generate_pdf_report(self, original_path, stego_path, metrics, visualizations, output_filename):
+        """
+        Generate a comprehensive PDF report of the audio analysis
+        
+        Args:
+            original_path: Path to the original audio file
+            stego_path: Path to the stego audio file
+            metrics: AudioMetrics object with calculated metrics
+            visualizations: Dictionary with paths to visualization images
+            output_filename: Filename for the PDF report
+            
+        Returns:
+            Path to the generated PDF report
+        """
+        # Format metrics for display
+        snr_formatted = f"{metrics.snr:.2f} dB"
+        psnr_formatted = f"{metrics.psnr:.2f} dB"
+        lsd_formatted = f"{metrics.lsd:.4f}"
+        mse_formatted = f"{metrics.mse:.8f}"
+        histogram_corr_formatted = f"{metrics.histogram_correlation:.4f}"
+        duration_formatted = f"{metrics.duration:.2f} seconds"
+        
+        # Get quality assessment
+        quality_text, _ = metrics.quality_rating
+        
+        # PDF file path
+        output_path = os.path.join(self.temp_dir, output_filename)
+        
+        # Create PDF generator
+        pdf = PDFReportGenerator(output_path)
+        
+        # Add title and file info
+        pdf.add_title("Audio Steganography Analysis Report")
+        pdf.add_file_info(original_path, stego_path)
+        
+        # Add Audio Quality Metrics
+        pdf.add_heading("Audio Quality Metrics")
+        
+        # Create metrics table
+        metrics_data = [
+            ["Metric", "Value", "Description"],
+            ["PSNR", psnr_formatted, "Higher is better. Measures signal quality."],
+            ["SNR", snr_formatted, "Higher is better. Compares signal strength to noise."],
+            ["MSE", mse_formatted, "Lower is better. Measures average squared difference."],
+            ["LSD", lsd_formatted, "Lower is better. Measures spectral differences."],
+            ["Histogram Correlation", histogram_corr_formatted, "Closer to 1 is better. Measures statistical similarity."]
+        ]
+        
+        pdf.add_metrics_table(metrics_data)
+        
+        # Quality Assessment
+        pdf.add_heading("Quality Assessment")
+        pdf.add_paragraph(quality_text)
+        
+        # Audio File Information
+        pdf.add_heading("Audio File Information")
+        
+        # Create info table
+        info_data = [
+            ["Duration", duration_formatted],
+            ["Sample Rate", f"{metrics.sample_rate} Hz"],
+            ["Channels", f"{metrics.channels} ({'Stereo' if metrics.channels > 1 else 'Mono'})"]
+        ]
+        
+        pdf.add_info_table(info_data)
+        
+        # Add visualizations (ensure images are scaled correctly)
+        if 'histogram_comparison' in visualizations:
+            pdf.add_heading("Histogram Analysis")
+            pdf.add_image(
+                visualizations['histogram_comparison'], 
+                width=7, 
+                height=4, 
+                caption=f"Histogram Correlation: {histogram_corr_formatted} (closer to 1.0 is better)"
+            )
+            
+        if 'waveform_orig' in visualizations and 'waveform_stego' in visualizations:
+            pdf.add_heading("Waveform Comparison")
+            pdf.add_subheading("Original Audio Waveform")
+            pdf.add_image(visualizations['waveform_orig'], width=7, height=3)
+            
+            pdf.add_subheading("Stego Audio Waveform")
+            pdf.add_image(visualizations['waveform_stego'], width=7, height=3)
+            
+        if 'difference' in visualizations:
+            pdf.add_heading("Difference Analysis")
+            pdf.add_image(
+                visualizations['difference'], 
+                width=7, 
+                height=3, 
+                caption="Note: Differences are amplified by 50x for visibility"
+            )
+        
+        if 'spectrogram_orig' in visualizations and 'spectrogram_stego' in visualizations:
+            pdf.add_heading("Spectrogram Analysis")
+            pdf.add_subheading("Original Audio Spectrogram")
+            pdf.add_image(visualizations['spectrogram_orig'], width=7, height=3)
+            
+            pdf.add_subheading("Stego Audio Spectrogram")
+            pdf.add_image(visualizations['spectrogram_stego'], width=7, height=3)
+            
+        if 'spectrum_orig' in visualizations and 'spectrum_stego' in visualizations:
+            pdf.add_heading("Frequency Spectrum Analysis")
+            pdf.add_subheading("Original Audio Frequency Spectrum")
+            pdf.add_image(visualizations['spectrum_orig'], width=7, height=3)
+            
+            pdf.add_subheading("Stego Audio Frequency Spectrum")
+            pdf.add_image(visualizations['spectrum_stego'], width=7, height=3)
+            
+        # Add footer
+        pdf.add_footer()
+        
+        # Generate the PDF
+        return pdf.generate()
+
 if __name__ == "__main__":
     # Simple test code
     import sys
@@ -873,3 +1001,4 @@ if __name__ == "__main__":
     print(f"MSE: {result['metrics']['MSE']:.8f}")
     print(f"Histogram Correlation: {result['metrics']['histogram_correlation']:.4f}")
     print(f"Report saved to: {result['report_path']}")
+    print(f"PDF Report saved to: {result['pdf_report_path']}")
